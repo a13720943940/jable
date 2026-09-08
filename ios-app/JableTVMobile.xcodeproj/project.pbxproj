@@ -1,0 +1,405 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1AB9B68B01BED7ADCFED2F90 /* MediaLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC9D00ADF8D3283F8366463 /* MediaLibraryView.swift */; };
+		43E2DCDA5031CECC6A293A99 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3690DD5FC71270121D10B81 /* APIClient.swift */; };
+		4B378395F7157AAA84212BF4 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112E244DA9062FC09FE331E7 /* RootTabView.swift */; };
+		5316069D728F99DC270963FB /* ManualTaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF2A4E90C21DE12BA15EFC26 /* ManualTaskView.swift */; };
+		7D43107A8A03B2C68868E581 /* HuangguoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94C4456B4F37A705751593E1 /* HuangguoView.swift */; };
+		A88987175F25D46DA72D854F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87AB0C417E0811CC9BBDD935 /* SettingsView.swift */; };
+		B18039E8F9E0AA962800B28F /* CatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 891BCF2B43FB8017B3A9ABD8 /* CatalogView.swift */; };
+		B849B9528C12B1EFC89689C9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 71011B353C22BA643C5D74FF /* Assets.xcassets */; };
+		D9D85090EB8C9D50EB9C9896 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 73C7D1368BBA4A82117AB61E /* Kingfisher */; };
+		DFD8E4F763495EC596F8D02D /* JableTVMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C456EFD073F4C885201513AB /* JableTVMobileApp.swift */; };
+		EDB55C0F76BFF8FDB5ED05C4 /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05911A5A60FFFD2FFA1864B9 /* AppViewModel.swift */; };
+		F8B4226F850B97F631DE9672 /* TasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9244201EE171509845188770 /* TasksView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		05911A5A60FFFD2FFA1864B9 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
+		07A866188EEFECA1B04A0A8E /* JableTVMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = JableTVMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		112E244DA9062FC09FE331E7 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		71011B353C22BA643C5D74FF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		87AB0C417E0811CC9BBDD935 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		891BCF2B43FB8017B3A9ABD8 /* CatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogView.swift; sourceTree = "<group>"; };
+		94C4456B4F37A705751593E1 /* HuangguoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HuangguoView.swift; sourceTree = "<group>"; };
+		9244201EE171509845188770 /* TasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksView.swift; sourceTree = "<group>"; };
+		BBC9D00ADF8D3283F8366463 /* MediaLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryView.swift; sourceTree = "<group>"; };
+		BF2A4E90C21DE12BA15EFC26 /* ManualTaskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualTaskView.swift; sourceTree = "<group>"; };
+		C456EFD073F4C885201513AB /* JableTVMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JableTVMobileApp.swift; sourceTree = "<group>"; };
+		D3690DD5FC71270121D10B81 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F41912011952279B78083390 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D9D85090EB8C9D50EB9C9896 /* Kingfisher in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5F44430F8AD4754ECA9EB196 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				07A866188EEFECA1B04A0A8E /* JableTVMobile.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		75FED4F194C15815570AE563 = {
+			isa = PBXGroup;
+			children = (
+				D448E64F022D9A8023BDF0D4 /* JableTVMobile */,
+				5F44430F8AD4754ECA9EB196 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D448E64F022D9A8023BDF0D4 /* JableTVMobile */ = {
+			isa = PBXGroup;
+			children = (
+				D3690DD5FC71270121D10B81 /* APIClient.swift */,
+				05911A5A60FFFD2FFA1864B9 /* AppViewModel.swift */,
+				71011B353C22BA643C5D74FF /* Assets.xcassets */,
+				891BCF2B43FB8017B3A9ABD8 /* CatalogView.swift */,
+				94C4456B4F37A705751593E1 /* HuangguoView.swift */,
+				C456EFD073F4C885201513AB /* JableTVMobileApp.swift */,
+				BF2A4E90C21DE12BA15EFC26 /* ManualTaskView.swift */,
+				BBC9D00ADF8D3283F8366463 /* MediaLibraryView.swift */,
+				112E244DA9062FC09FE331E7 /* RootTabView.swift */,
+				87AB0C417E0811CC9BBDD935 /* SettingsView.swift */,
+				9244201EE171509845188770 /* TasksView.swift */,
+			);
+			path = JableTVMobile;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4DD0219261391699C30935F6 /* JableTVMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3AB9BD2319825465A187B734 /* Build configuration list for PBXNativeTarget "JableTVMobile" */;
+			buildPhases = (
+				BDB70837050FE5767C1186E1 /* Sources */,
+				BF4AF479350AED1708646A4F /* Resources */,
+				F41912011952279B78083390 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = JableTVMobile;
+			packageProductDependencies = (
+				73C7D1368BBA4A82117AB61E /* Kingfisher */,
+			);
+			productName = JableTVMobile;
+			productReference = 07A866188EEFECA1B04A0A8E /* JableTVMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4E1E8A578774EEA88948EA6B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 9073FD43EA1A9B18392FDB29 /* Build configuration list for PBXProject "JableTVMobile" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 75FED4F194C15815570AE563;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5D8936D77D3560796D64FD70 /* XCRemoteSwiftPackageReference "Kingfisher" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5F44430F8AD4754ECA9EB196 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4DD0219261391699C30935F6 /* JableTVMobile */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		BF4AF479350AED1708646A4F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B849B9528C12B1EFC89689C9 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BDB70837050FE5767C1186E1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				43E2DCDA5031CECC6A293A99 /* APIClient.swift in Sources */,
+				EDB55C0F76BFF8FDB5ED05C4 /* AppViewModel.swift in Sources */,
+				B18039E8F9E0AA962800B28F /* CatalogView.swift in Sources */,
+				7D43107A8A03B2C68868E581 /* HuangguoView.swift in Sources */,
+				DFD8E4F763495EC596F8D02D /* JableTVMobileApp.swift in Sources */,
+				5316069D728F99DC270963FB /* ManualTaskView.swift in Sources */,
+				1AB9B68B01BED7ADCFED2F90 /* MediaLibraryView.swift in Sources */,
+				4B378395F7157AAA84212BF4 /* RootTabView.swift in Sources */,
+				A88987175F25D46DA72D854F /* SettingsView.swift in Sources */,
+				F8B4226F850B97F631DE9672 /* TasksView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		26821A40FBB7170D4225B0BD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7101A5A491360DB2D686D722 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		919290F7A058AC03EB445C2F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Jable 媒体库";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
+				INFOPLIST_KEY_NSAppTransportSecurity = "[\"NSAllowsLocalNetworking\": true, \"NSAllowsArbitraryLoads\": true]";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于连接本机或 Docker 下载服务。";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
+					UIInterfaceOrientationPortrait,
+				);
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = (
+					UIInterfaceOrientationPortrait,
+					UIInterfaceOrientationLandscapeLeft,
+					UIInterfaceOrientationLandscapeRight,
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.w.jabletvmobile;
+				PRODUCT_NAME = jable;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		9BB31ADE149C2501E34B2949 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Jable 媒体库";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
+				INFOPLIST_KEY_NSAppTransportSecurity = "[\"NSAllowsLocalNetworking\": true, \"NSAllowsArbitraryLoads\": true]";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于连接本机或 Docker 下载服务。";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
+					UIInterfaceOrientationPortrait,
+				);
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = (
+					UIInterfaceOrientationPortrait,
+					UIInterfaceOrientationLandscapeLeft,
+					UIInterfaceOrientationLandscapeRight,
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.w.jabletvmobile;
+				PRODUCT_NAME = jable;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3AB9BD2319825465A187B734 /* Build configuration list for PBXNativeTarget "JableTVMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				26821A40FBB7170D4225B0BD /* Debug */,
+				7101A5A491360DB2D686D722 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9073FD43EA1A9B18392FDB29 /* Build configuration list for PBXProject "JableTVMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9BB31ADE149C2501E34B2949 /* Debug */,
+				919290F7A058AC03EB445C2F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5D8936D77D3560796D64FD70 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/onevcat/Kingfisher.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		73C7D1368BBA4A82117AB61E /* Kingfisher */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5D8936D77D3560796D64FD70 /* XCRemoteSwiftPackageReference "Kingfisher" */;
+			productName = Kingfisher;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 4E1E8A578774EEA88948EA6B /* Project object */;
+}

@@ -1,0 +1,10 @@
+FROM jable-tv-downloader:amd64
+
+RUN apt-get update && apt-get install -y --no-install-recommends chromium chromium-driver \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY docker-web.py /app/docker-web.py
+COPY docker-web-static /app/docker-web-static
+COPY tools/m3u8-Downloader-Go /app/tools/m3u8-Downloader-Go
+RUN chmod +x /app/tools/m3u8-Downloader-Go
+CMD ["gunicorn", "--workers", "1", "--threads", "8", "--timeout", "0", "--bind", "0.0.0.0:8788", "docker-web:app"]
