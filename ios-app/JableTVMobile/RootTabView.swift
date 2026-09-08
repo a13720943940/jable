@@ -19,31 +19,31 @@ struct RootTabView: View {
                 TabView(selection: $viewModel.selectedTab) {
                     CatalogView()
                         .tabItem {
-                            Label("影片", systemImage: "rectangle.grid.1x2")
+                            Label("影片", systemImage: "square.grid.2x2.fill")
                         }
                         .tag(0)
 
                     MediaLibraryView()
                         .tabItem {
-                            Label("媒体库", systemImage: "play.square")
+                            Label("媒体库", systemImage: "play.rectangle.fill")
                         }
                         .tag(1)
 
                     HuangguoView()
                         .tabItem {
-                            Label("黄果", systemImage: "bolt.circle")
+                            Label("黄果", systemImage: "bolt.fill")
                         }
                         .tag(2)
 
                     TasksView()
                         .tabItem {
-                            Label("下载", systemImage: "arrow.down.square")
+                            Label("下载", systemImage: "arrow.down.circle.fill")
                         }
                         .tag(3)
 
                     SettingsView(onDisconnect: disconnect)
                         .tabItem {
-                            Label("设置", systemImage: "line.3.horizontal.circle")
+                            Label("设置", systemImage: "slider.horizontal.3")
                         }
                         .tag(4)
                 }

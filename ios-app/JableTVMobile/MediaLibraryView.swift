@@ -128,8 +128,9 @@ struct MediaLibraryView: View {
                     }
                 }
             }
-                .padding(16)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 16)
             }
             .searchable(text: $viewModel.mediaSearchText, prompt: "搜索番号、标题或路径")
             .navigationTitle("")
@@ -142,7 +143,7 @@ struct MediaLibraryView: View {
                 }
             }
             .background(LinearGradient(colors: [Color(.systemGroupedBackground), Color.blue.opacity(0.10), Color.cyan.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             .refreshable {
                 await viewModel.refreshStats()
                 await viewModel.refreshMedia()

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject private var viewModel: AppViewModel
@@ -72,50 +73,6 @@ struct SettingsView: View {
                     LabeledContent("浏览器自动化", value: (viewModel.health?.browser ?? false) ? "可用" : "不可用")
                     LabeledContent("下载器", value: (viewModel.health?.downloader ?? false) ? "可用" : "不可用")
                     LabeledContent("媒体目录", value: viewModel.health?.media ?? "-")
-                }
-
-                Section("授权中心") {
-                    LabeledContent("授权状态") {
-                        Text(licenseStatusText)
-                            .foregroundStyle((viewModel.license?.activated ?? false) ? .green : .red)
-                    }
-                    if let deviceID = viewModel.license?.deviceID, !deviceID.isEmpty {
-                        LabeledContent("设备码", value: deviceID)
-                            .textSelection(.enabled)
-                    }
-                    LabeledContent("有效期", value: licenseExpiryText)
-
-                    TextField("粘贴授权码", text: $licenseCode, axis: .vertical)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-
-                    HStack {
-                        Button {
-                            Task { await viewModel.refreshLicense() }
-                        } label: {
-                            Label("刷新授权", systemImage: "arrow.clockwise")
-                        }
-
-                        Spacer()
-
-                        Button {
-                            let code = licenseCode.trimmingCharacters(in: .whitespacesAndNewlines)
-                            Task {
-                                await viewModel.activateLicense(code)
-                                licenseCode = ""
-                            }
-                        } label: {
-                            Label("激活", systemImage: "checkmark.seal")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(licenseCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-
-                    if let message = viewModel.license?.message, !message.isEmpty {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
                 }
 
                 Section("下载设置") {
@@ -257,6 +214,42 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("授权中心") {
+                    NavigationLink {
+                        LicenseAdminConsoleView()
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("授权控制台")
+                                Text("连接 8789 发码、吊销、查看设备在线")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        } icon: {
+                            Image(systemName: "key.horizontal.fill")
+                                .foregroundStyle(.blue)
+                        }
+                    }
+
+                    NavigationLink {
+                        LicenseCenterView()
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("当前设备授权")
+                                Text("\(viewModel.serverURL.isEmpty ? "请先连接服务" : viewModel.serverURL) · \(licenseStatusText)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        } icon: {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundStyle((viewModel.license?.activated ?? false) ? .green : .blue)
+                        }
+                    }
+                }
+
                 Section {
                     Button(role: .destructive) {
                         onDisconnect()
@@ -349,5 +342,354 @@ struct SettingsView: View {
         Task {
             await viewModel.refreshAll(refreshCatalog: true)
         }
+    }
+}
+
+private struct LicenseAdminConsoleView: View {
+    @AppStorage("licenseConsoleURL") private var consoleURL = "http://192.168.2.50:8789"
+    @AppStorage("licenseConsolePassword") private var consolePassword = ""
+    @State private var summary: LicenseAdminSummary?
+    @State private var deviceID = ""
+    @State private var owner = ""
+    @State private var days = 365
+    @State private var issuedCode = ""
+    @State private var isLoading = false
+    @State private var message = ""
+    @State private var showMessage = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        Form {
+            Section("控制台连接") {
+                TextField("http://192.168.2.50:8789", text: $consoleURL)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($focused)
+
+                SecureField("授权控制台密码", text: $consolePassword)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                Button {
+                    Task { await refresh() }
+                } label: {
+                    if isLoading {
+                        ProgressView()
+                    } else {
+                        Label("连接并刷新", systemImage: "arrow.clockwise")
+                    }
+                }
+                .disabled(isLoading || consoleURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || consolePassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if let summary {
+                Section("概览") {
+                    LabeledContent("授权记录", value: "\(summary.recordCount)")
+                    LabeledContent("在线设备", value: "\(summary.onlineCount)")
+                    LabeledContent("吊销设备", value: "\(summary.revokedCount)")
+                    if let revocationURL = summary.revocationURL, !revocationURL.isEmpty {
+                        LabeledContent("吊销列表") {
+                            Text(revocationURL)
+                                .lineLimit(1)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+
+            Section("签发授权码") {
+                TextField("设备码", text: $deviceID, axis: .vertical)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("所属人备注", text: $owner)
+                Stepper(days == 0 ? "有效期：永久" : "有效期：\(days) 天", value: $days, in: 0 ... 3650, step: 30)
+
+                Button {
+                    Task { await issue() }
+                } label: {
+                    Label("生成授权码", systemImage: "plus.seal")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isLoading || deviceID.trimmingCharacters(in: .whitespacesAndNewlines).count < 8 || consolePassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if !issuedCode.isEmpty {
+                    Text(issuedCode)
+                        .font(.footnote.monospaced())
+                        .textSelection(.enabled)
+
+                    Button {
+                        UIPasteboard.general.string = issuedCode
+                        notify("授权码已复制")
+                    } label: {
+                        Label("复制授权码", systemImage: "doc.on.doc")
+                    }
+                }
+            }
+
+            Section("授权记录") {
+                if let records = summary?.records, !records.isEmpty {
+                    ForEach(records) { record in
+                        recordRow(record)
+                    }
+                } else {
+                    ContentUnavailableView("暂无授权记录", systemImage: "person.badge.key", description: Text("连接控制台后会显示已签发和已上报心跳的设备。"))
+                }
+            }
+
+            if let revoked = summary?.revoked, !revoked.isEmpty {
+                Section("吊销名单") {
+                    ForEach(revoked, id: \.self) { device in
+                        HStack(spacing: 10) {
+                            Text(device)
+                                .font(.footnote.monospaced())
+                                .lineLimit(2)
+                                .textSelection(.enabled)
+                            Spacer()
+                            Button("解除") {
+                                Task { await unrevoke(deviceID: device) }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("授权控制台")
+        .navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden)
+        .background(LinearGradient(colors: [Color(.systemGroupedBackground), Color.blue.opacity(0.10), Color.cyan.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .alert("授权控制台", isPresented: $showMessage) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(message)
+        }
+        .task {
+            if !consoleURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               !consolePassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                await refresh()
+            }
+        }
+    }
+
+    private func recordRow(_ record: LicenseAdminRecord) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(record.owner.isEmpty ? "未备注" : record.owner)
+                        .font(.headline)
+                    Text(record.deviceID)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                    Text(recordDetail(record))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(record.revoked ? "已吊销" : "正常")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(record.revoked ? .red : .green)
+                    Text(record.online ? "在线" : "离线")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(record.online ? .blue : .secondary)
+                }
+            }
+
+            HStack {
+                if !record.code.isEmpty {
+                    Button("复制授权码") {
+                        UIPasteboard.general.string = record.code
+                        notify("授权码已复制")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Button(record.revoked ? "解除吊销" : "立即吊销") {
+                    Task {
+                        if record.revoked {
+                            await unrevoke(deviceID: record.deviceID)
+                        } else {
+                            await revoke(deviceID: record.deviceID)
+                        }
+                    }
+                }
+                .buttonStyle(.bordered)
+                .tint(record.revoked ? .blue : .red)
+
+                Button("删除") {
+                    Task { await deleteRecord(deviceID: record.deviceID) }
+                }
+                .buttonStyle(.bordered)
+                .tint(.secondary)
+            }
+            .font(.caption)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var client: LicenseConsoleClient {
+        LicenseConsoleClient(baseURL: consoleURL, password: consolePassword)
+    }
+
+    private func refresh() async {
+        await run {
+            summary = try await client.summary()
+            issuedCode = summary?.issued ?? issuedCode
+        }
+    }
+
+    private func issue() async {
+        let trimmedDeviceID = deviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        await run {
+            let result = try await client.issue(deviceID: trimmedDeviceID, owner: owner, days: days)
+            summary = result
+            issuedCode = result.issued ?? ""
+            if !issuedCode.isEmpty {
+                UIPasteboard.general.string = issuedCode
+            }
+        }
+        if !issuedCode.isEmpty {
+            notify("授权码已生成并复制")
+        }
+    }
+
+    private func revoke(deviceID: String) async {
+        await run {
+            summary = try await client.revoke(deviceID: deviceID)
+        }
+    }
+
+    private func unrevoke(deviceID: String) async {
+        await run {
+            summary = try await client.unrevoke(deviceID: deviceID)
+        }
+    }
+
+    private func deleteRecord(deviceID: String) async {
+        await run {
+            summary = try await client.deleteRecord(deviceID: deviceID)
+        }
+    }
+
+    private func run(_ operation: () async throws -> Void) async {
+        focused = false
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await operation()
+        } catch {
+            notify(error.localizedDescription)
+        }
+    }
+
+    private func notify(_ text: String) {
+        message = text
+        showMessage = true
+    }
+
+    private func recordDetail(_ record: LicenseAdminRecord) -> String {
+        var parts: [String] = []
+        parts.append(record.expiresAt == 0 ? "永久有效" : "到期 \(dateText(record.expiresAt))")
+        if let lastSeen = record.lastSeen, lastSeen > 0 {
+            parts.append("最近上线 \(dateText(lastSeen))")
+        } else {
+            parts.append("从未上线")
+        }
+        if !record.hostname.isEmpty {
+            parts.append(record.hostname)
+        }
+        if !record.lastIP.isEmpty {
+            parts.append(record.lastIP)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func dateText(_ timestamp: Double?) -> String {
+        guard let timestamp, timestamp > 0 else { return "-" }
+        let date = Date(timeIntervalSince1970: timestamp)
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+}
+
+private struct LicenseCenterView: View {
+    @EnvironmentObject private var viewModel: AppViewModel
+    @State private var licenseCode = ""
+
+    var body: some View {
+        Form {
+            Section("当前服务") {
+                LabeledContent("服务地址", value: viewModel.serverURL.isEmpty ? "-" : viewModel.serverURL)
+                LabeledContent("访问密码") {
+                    Text(viewModel.accessPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未填写" : "已填写")
+                        .foregroundStyle(viewModel.accessPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.secondary : Color.green)
+                }
+            }
+
+            Section("授权信息") {
+                LabeledContent("授权状态") {
+                    Text(licenseStatusText)
+                        .foregroundStyle((viewModel.license?.activated ?? false) ? .green : .red)
+                }
+                if let deviceID = viewModel.license?.deviceID, !deviceID.isEmpty {
+                    LabeledContent("设备码", value: deviceID)
+                        .textSelection(.enabled)
+                }
+                LabeledContent("有效期", value: licenseExpiryText)
+                if let message = viewModel.license?.message, !message.isEmpty {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("激活授权") {
+                TextField("粘贴授权码", text: $licenseCode, axis: .vertical)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                HStack {
+                    Button {
+                        Task { await viewModel.refreshLicense() }
+                    } label: {
+                        Label("刷新授权", systemImage: "arrow.clockwise")
+                    }
+
+                    Spacer()
+
+                    Button {
+                        let code = licenseCode.trimmingCharacters(in: .whitespacesAndNewlines)
+                        Task {
+                            await viewModel.activateLicense(code)
+                            licenseCode = ""
+                        }
+                    } label: {
+                        Label("激活", systemImage: "checkmark.seal")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(licenseCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .navigationTitle("授权中心")
+        .navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden)
+        .background(LinearGradient(colors: [Color(.systemGroupedBackground), Color.blue.opacity(0.10), Color.cyan.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .task {
+            await viewModel.refreshLicense()
+        }
+    }
+
+    private var licenseStatusText: String {
+        guard let license = viewModel.license else { return "未读取" }
+        return license.activated ? "已授权" : "未授权"
+    }
+
+    private var licenseExpiryText: String {
+        guard let expiresAt = viewModel.license?.expiresAt else { return "-" }
+        if expiresAt <= 0 { return "永久有效" }
+        let date = Date(timeIntervalSince1970: expiresAt)
+        return date.formatted(date: .abbreviated, time: .shortened)
     }
 }

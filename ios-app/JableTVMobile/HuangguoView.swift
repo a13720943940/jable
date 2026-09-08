@@ -287,168 +287,349 @@ struct HuangguoView: View {
 
 struct HuangguoCatalogDetailView: View {
     @EnvironmentObject private var viewModel: AppViewModel
+    @Environment(\.dismiss) private var dismiss
     let item: HuangguoCatalogItem
     @State private var running = ""
 
     var body: some View {
-        List {
-            Section {
-                KFImage(viewModel.client().proxiedImageURL(item.coverURL))
-                    .placeholder { ProgressView() }
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .blur(radius: viewModel.isPrivacyModeEnabled ? 12 : 0)
-                Text(item.title)
-                    .font(.headline)
-                if !item.remark.isEmpty {
-                    LabeledContent("状态", value: item.remark)
-                }
-                LabeledContent("来源 ID", value: item.id)
-            }
+        let online = matchingOnline
+        ZStack {
+            huangguoPoster(url: item.coverURL, proxied: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+                .blur(radius: viewModel.isPrivacyModeEnabled ? 18 : 10)
+                .opacity(0.42)
 
-            Section("操作") {
-                Button {
-                    running = "online"
-                    Task {
-                        await viewModel.loadHuangguoOnline(detailURL: item.detailURL)
-                        running = ""
+            LinearGradient(
+                colors: [.white.opacity(0.34), Color(.systemBackground).opacity(0.78), Color(.systemBackground)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: 22) {
+                    hero(online: online)
+                    actionRow
+                    if let online {
+                        onlineEpisodes(online)
+                    } else {
+                        loadingEpisodesHint
                     }
-                } label: {
-                    running == "online" ? AnyView(ProgressView()) : AnyView(Label("解析在线播放分集", systemImage: "play.circle"))
                 }
-                Button {
-                    running = "add"
-                    Task {
-                        await viewModel.addHuangguoSeries(url: item.detailURL)
-                        running = ""
-                    }
-                } label: {
-                    running == "add" ? AnyView(ProgressView()) : AnyView(Label("自动入库并下载", systemImage: "plus.circle"))
+                .padding(.horizontal, 20)
+                .padding(.top, 92)
+                .padding(.bottom, 110)
+            }
+        }
+        .navigationTitle(item.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline.bold())
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
             }
-
-            if let online = viewModel.selectedHuangguoOnline, online.detailURL == item.detailURL || online.id == item.id {
-                Section("分集") {
-                    ForEach(online.episodes) { episode in
-                        Button {
-                            viewModel.play(
-                                title: "\(online.title) 第\(episode.ep)集",
-                                url: viewModel.client().huangguoOnlinePlayURL(playURL: episode.playURL, ep: episode.ep)
-                            )
-                        } label: {
-                            Label("第 \(episode.ep) 集", systemImage: episode.locked ? "lock" : "play.circle")
-                        }
-                        .disabled(episode.locked || episode.playURL.isEmpty)
-                    }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await viewModel.loadHuangguoOnline(detailURL: item.detailURL) }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.headline.bold())
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
             }
         }
-        .navigationTitle("黄果详情")
-        .navigationBarTitleDisplayMode(.inline)
-        .scrollContentBackground(.hidden)
-        .background(Color(.systemGroupedBackground))
+        .task {
+            if matchingOnline == nil {
+                await viewModel.loadHuangguoOnline(detailURL: item.detailURL)
+            }
+        }
+    }
+
+    private var matchingOnline: HuangguoOnlineSeries? {
+        guard let online = viewModel.selectedHuangguoOnline else { return nil }
+        return (online.detailURL == item.detailURL || online.id == item.id) ? online : nil
+    }
+
+    private func hero(online: HuangguoOnlineSeries?) -> some View {
+        VStack(spacing: 14) {
+            huangguoPoster(url: online?.coverURL.isEmpty == false ? online?.coverURL ?? item.coverURL : item.coverURL, proxied: true)
+                .frame(width: 150, height: 225)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .shadow(color: .black.opacity(0.20), radius: 20, x: 0, y: 10)
+                .blur(radius: viewModel.isPrivacyModeEnabled ? 12 : 0)
+
+            Text(online?.title ?? item.title)
+                .font(.title2.bold())
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+
+            Text(metaText(online: online))
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button {
+                if let first = online?.episodes.first(where: { !$0.locked && !$0.playURL.isEmpty }) {
+                    play(episode: first, in: online!)
+                } else {
+                    Task { await viewModel.loadHuangguoOnline(detailURL: item.detailURL) }
+                }
+            } label: {
+                Label("播放", systemImage: "play.fill")
+                    .font(.subheadline.bold())
+                    .frame(maxWidth: 260)
+                    .frame(height: 44)
+                    .background(.white.opacity(0.94), in: Capsule())
+                    .foregroundStyle(.black.opacity(0.82))
+            }
+        }
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 12) {
+            Button {
+                running = "online"
+                Task {
+                    await viewModel.loadHuangguoOnline(detailURL: item.detailURL)
+                    running = ""
+                }
+            } label: {
+                detailActionLabel(title: "解析", systemImage: "play.circle.fill", active: running == "online")
+            }
+            Button {
+                running = "add"
+                Task {
+                    await viewModel.addHuangguoSeries(url: item.detailURL)
+                    running = ""
+                }
+            } label: {
+                detailActionLabel(title: "入库下载", systemImage: "plus.circle.fill", active: running == "add")
+            }
+        }
+    }
+
+    private func onlineEpisodes(_ online: HuangguoOnlineSeries) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("分集")
+                .font(.title3.bold())
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(online.episodes) { episode in
+                    Button {
+                        play(episode: episode, in: online)
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: episode.locked ? "lock.fill" : "play.fill")
+                                .font(.caption.bold())
+                            Text("第 \(episode.ep) 集")
+                                .font(.subheadline.bold())
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .background(.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(episode.locked || episode.playURL.isEmpty)
+                    .opacity(episode.locked || episode.playURL.isEmpty ? 0.45 : 1)
+                }
+            }
+        }
+    }
+
+    private var loadingEpisodesHint: some View {
+        ProgressView(viewModel.isLoadingHuangguo ? "正在解析分集…" : "等待分集数据")
+            .frame(maxWidth: .infinity)
+            .padding(28)
+            .background(.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func play(episode: HuangguoOnlineEpisode, in online: HuangguoOnlineSeries) {
+        viewModel.play(
+            title: "\(online.title) 第\(episode.ep)集",
+            url: viewModel.client().huangguoOnlinePlayURL(playURL: episode.playURL, ep: episode.ep)
+        )
+    }
+
+    private func metaText(online: HuangguoOnlineSeries?) -> String {
+        let episodeCount = online?.episodes.count ?? 0
+        let parts = [item.remark, episodeCount > 0 ? "共 \(episodeCount) 集" : "", item.score.isEmpty ? "" : "评分 \(item.score)"]
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
 
 struct HuangguoSeriesDetailView: View {
     @EnvironmentObject private var viewModel: AppViewModel
+    @Environment(\.dismiss) private var dismiss
     let series: HuangguoSeries
     @State private var runningID = ""
 
     var body: some View {
-        List {
-            Section {
-                KFImage(viewModel.client().huangguoCoverURL(seriesID: series.id))
-                    .placeholder { ProgressView() }
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .blur(radius: viewModel.isPrivacyModeEnabled ? 12 : 0)
-                Text(series.title)
-                    .font(.headline)
-                LabeledContent("集数", value: "共 \(series.totalEpisodes) · 已下 \(series.downloadedEpisodes) · 已传 \(series.uploadedEpisodes)")
-                LabeledContent("状态", value: series.completed == 1 ? "已完结" : "追更中")
-            }
+        ZStack {
+            huangguoPoster(url: series.coverURL, proxied: true, fallbackSeriesID: series.id)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+                .blur(radius: viewModel.isPrivacyModeEnabled ? 18 : 10)
+                .opacity(0.42)
 
-            Section("操作") {
-                Button("检查追更") { run(.check(series.id), id: "check") }
-                Button("重新刮削") { run(.rescrape(series.id), id: "rescrape") }
-                Button("下载缺失分集") { run(.downloadMissing(series.id), id: "missing") }
-                Button(series.completed == 1 ? "恢复追更" : "标记完结") {
-                    run(.complete(series.id, series.completed != 1), id: "complete")
+            LinearGradient(
+                colors: [.white.opacity(0.34), Color(.systemBackground).opacity(0.78), Color(.systemBackground)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: 22) {
+                    hero
+                    actionGrid
+                    episodeGrid
+                    deleteButton
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 92)
+                .padding(.bottom, 110)
+            }
+        }
+        .navigationTitle(series.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline.bold())
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
             }
-
-            Section("分集") {
-                if viewModel.selectedHuangguoEpisodes.isEmpty {
-                    ContentUnavailableView("暂无分集", systemImage: "list.number")
-                } else {
-                    ForEach(viewModel.selectedHuangguoEpisodes) { episode in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("第 \(episode.ep) 集")
-                                    .font(.headline)
-                                Spacer()
-                                statusLabel(episode.state)
-                                uploadLabel(episode.uploadState)
-                            }
-                            ProgressView(value: min(1, max(0, episode.progress)))
-                            if !episode.message.isEmpty {
-                                Text(episode.message)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if !episode.error.isEmpty {
-                                Text(episode.error)
-                                    .font(.caption)
-                                    .foregroundStyle(.red)
-                            }
-                            HStack {
-                                if !episode.filePath.isEmpty {
-                                    Button("播放本地") {
-                                        viewModel.play(title: "\(series.title) 第\(episode.ep)集", url: viewModel.client().localMediaPlayURL(path: episode.filePath))
-                                    }
-                                    .buttonStyle(.bordered)
-                                }
-                                if !episode.playURL.isEmpty {
-                                    Button("在线播放") {
-                                        viewModel.play(title: "\(series.title) 第\(episode.ep)集", url: viewModel.client().huangguoOnlinePlayURL(playURL: episode.playURL, ep: episode.ep))
-                                    }
-                                    .buttonStyle(.bordered)
-                                }
-                                Button(episode.state == "completed" ? "重下" : "下载") {
-                                    run(.downloadEpisode(episode.id), id: episode.id)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                if episode.uploadState == "failed" {
-                                    Button("重传") {
-                                        run(.retryUpload(episode.id), id: "upload-\(episode.id)")
-                                    }
-                                    .buttonStyle(.bordered)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 4)
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("检查追更") { run(.check(series.id), id: "check") }
+                    Button("重新刮削") { run(.rescrape(series.id), id: "rescrape") }
+                    Button("下载缺失分集") { run(.downloadMissing(series.id), id: "missing") }
+                    Button(series.completed == 1 ? "恢复追更" : "标记完结") {
+                        run(.complete(series.id, series.completed != 1), id: "complete")
                     }
-                }
-            }
-
-            Section {
-                Button(role: .destructive) {
-                    run(.delete(series.id, false), id: "delete")
                 } label: {
-                    Label("删除追剧记录", systemImage: "trash")
+                    Image(systemName: "ellipsis")
+                        .font(.headline.bold())
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
             }
         }
-        .navigationTitle("短剧分集")
-        .navigationBarTitleDisplayMode(.inline)
-        .scrollContentBackground(.hidden)
-        .background(Color(.systemGroupedBackground))
         .task {
             await viewModel.loadHuangguoEpisodes(series)
         }
+    }
+
+    private var hero: some View {
+        VStack(spacing: 14) {
+            huangguoPoster(url: series.coverURL, proxied: true, fallbackSeriesID: series.id)
+                .frame(width: 150, height: 225)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .shadow(color: .black.opacity(0.20), radius: 20, x: 0, y: 10)
+                .blur(radius: viewModel.isPrivacyModeEnabled ? 12 : 0)
+
+            Text(series.title)
+                .font(.title2.bold())
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+
+            Text("黄果 · 共 \(series.totalEpisodes) 集 · 已下 \(series.downloadedEpisodes) · 已传 \(series.uploadedEpisodes)")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button {
+                if let first = viewModel.selectedHuangguoEpisodes.first(where: { !$0.filePath.isEmpty || !$0.playURL.isEmpty }) {
+                    play(first)
+                }
+            } label: {
+                Label("播放", systemImage: "play.fill")
+                    .font(.subheadline.bold())
+                    .frame(maxWidth: 260)
+                    .frame(height: 44)
+                    .background(.white.opacity(0.94), in: Capsule())
+                    .foregroundStyle(.black.opacity(0.82))
+            }
+            .disabled(viewModel.selectedHuangguoEpisodes.allSatisfy { $0.filePath.isEmpty && $0.playURL.isEmpty })
+        }
+    }
+
+    private var actionGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            Button { run(.check(series.id), id: "check") } label: {
+                detailActionLabel(title: "检查追更", systemImage: "arrow.clockwise", active: runningID == "check")
+            }
+            Button { run(.rescrape(series.id), id: "rescrape") } label: {
+                detailActionLabel(title: "重新刮削", systemImage: "sparkles", active: runningID == "rescrape")
+            }
+            Button { run(.downloadMissing(series.id), id: "missing") } label: {
+                detailActionLabel(title: "下载缺失", systemImage: "icloud.and.arrow.down", active: runningID == "missing")
+            }
+            Button { run(.complete(series.id, series.completed != 1), id: "complete") } label: {
+                detailActionLabel(title: series.completed == 1 ? "恢复追更" : "标记完结", systemImage: "checkmark.seal", active: runningID == "complete")
+            }
+        }
+    }
+
+    private var episodeGrid: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("分集")
+                .font(.title3.bold())
+            if viewModel.selectedHuangguoEpisodes.isEmpty {
+                ProgressView("正在加载分集…")
+                    .frame(maxWidth: .infinity)
+                    .padding(28)
+                    .background(.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    ForEach(viewModel.selectedHuangguoEpisodes) { episode in
+                        Button {
+                            if episode.filePath.isEmpty && episode.playURL.isEmpty {
+                                run(.downloadEpisode(episode.id), id: episode.id)
+                            } else {
+                                play(episode)
+                            }
+                        } label: {
+                            VStack(spacing: 5) {
+                                Text("第 \(episode.ep) 集")
+                                    .font(.subheadline.bold())
+                                Text(episodeSubtitle(episode))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                ProgressView(value: min(1, max(0, episode.progress)))
+                                    .opacity(episode.state == "running" ? 1 : 0)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 70)
+                            .padding(.horizontal, 8)
+                            .background(.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var deleteButton: some View {
+        Button(role: .destructive) {
+            run(.delete(series.id, false), id: "delete")
+        } label: {
+            Label("删除追剧记录", systemImage: "trash")
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+        }
+        .buttonStyle(.bordered)
     }
 
     private func run(_ action: HuangguoAction, id: String) {
@@ -457,6 +638,20 @@ struct HuangguoSeriesDetailView: View {
             await viewModel.runHuangguoAction(action)
             runningID = ""
         }
+    }
+
+    private func play(_ episode: HuangguoEpisode) {
+        if !episode.filePath.isEmpty {
+            viewModel.play(title: "\(series.title) 第\(episode.ep)集", url: viewModel.client().localMediaPlayURL(path: episode.filePath))
+        } else if !episode.playURL.isEmpty {
+            viewModel.play(title: "\(series.title) 第\(episode.ep)集", url: viewModel.client().huangguoOnlinePlayURL(playURL: episode.playURL, ep: episode.ep))
+        }
+    }
+
+    private func episodeSubtitle(_ episode: HuangguoEpisode) -> String {
+        if episode.state == "completed" { return uploadText(episode.uploadState) }
+        if episode.state == "running" { return "\(Int(episode.progress * 100))%" }
+        return stateText(episode.state)
     }
 
     private func statusLabel(_ state: String) -> some View {
@@ -508,4 +703,57 @@ struct HuangguoSeriesDetailView: View {
         default: return .secondary
         }
     }
+}
+
+private func huangguoPoster(url: String, proxied: Bool, fallbackSeriesID: String = "") -> some View {
+    HuangguoPosterImage(url: url, proxied: proxied, fallbackSeriesID: fallbackSeriesID)
+}
+
+private struct HuangguoPosterImage: View {
+    @EnvironmentObject private var viewModel: AppViewModel
+    let url: String
+    let proxied: Bool
+    let fallbackSeriesID: String
+
+    var body: some View {
+        KFImage(imageURL)
+            .placeholder {
+                ZStack {
+                    LinearGradient(colors: [.orange.opacity(0.28), .blue.opacity(0.18)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    Image(systemName: "play.rectangle.on.rectangle")
+                        .font(.system(size: 46, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+            }
+            .resizable()
+            .scaledToFill()
+    }
+
+    private var imageURL: URL? {
+        if proxied, !url.isEmpty {
+            return viewModel.client().proxiedImageURL(url)
+        }
+        if !fallbackSeriesID.isEmpty {
+            return viewModel.client().huangguoCoverURL(seriesID: fallbackSeriesID)
+        }
+        return URL(string: url)
+    }
+}
+
+private func detailActionLabel(title: String, systemImage: String, active: Bool) -> some View {
+    HStack(spacing: 8) {
+        if active {
+            ProgressView()
+        } else {
+            Image(systemName: systemImage)
+        }
+        Text(title)
+            .font(.subheadline.bold())
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+    .frame(maxWidth: .infinity)
+    .frame(height: 44)
+    .background(.white.opacity(0.84), in: Capsule())
+    .foregroundStyle(.primary)
 }

@@ -6,7 +6,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: jable-license-server:20260905-copy-fix
+    image: jable-license-server:20260908-admin-api
     container_name: jable-license-server
     restart: unless-stopped
     ports:

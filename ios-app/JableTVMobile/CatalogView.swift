@@ -8,6 +8,7 @@ struct CatalogView: View {
     @Query private var catalogCaches: [CatalogPageCache]
     @State private var catalogFilter = "all"
     @AppStorage("catalogLayoutStyle") private var catalogLayoutStyle = "grid"
+    private let gridColumns = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
 
     private var displayedItems: [CatalogItem] {
         switch catalogFilter {
@@ -44,7 +45,7 @@ struct CatalogView: View {
                     }
                 } else {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 14) {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack(alignment: .bottom) {
                                     VStack(alignment: .leading, spacing: 4) {
@@ -81,7 +82,7 @@ struct CatalogView: View {
                                 }
 
                             }
-                            .padding(16)
+                            .padding(12)
                             .background(
                                 LinearGradient(
                                     colors: [Color.blue.opacity(0.22), Color.cyan.opacity(0.10), Color(.secondarySystemGroupedBackground).opacity(0.82)],
@@ -97,6 +98,7 @@ struct CatalogView: View {
                                 Text("有时长").tag("timed")
                             }
                             .pickerStyle(.segmented)
+                            .frame(height: 34)
 
                             HStack {
                                 Text("最新影片")
@@ -121,7 +123,7 @@ struct CatalogView: View {
                                 }
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                             } else {
-                                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 18) {
+                                LazyVGrid(columns: gridColumns, spacing: 18) {
                                     ForEach(displayedItems) { item in
                                         NavigationLink {
                                             JableDetailView(item: item)
@@ -161,7 +163,9 @@ struct CatalogView: View {
                                 .disabled(!viewModel.catalogHasNext || viewModel.isLoadingCatalog)
                             }
                         }
-                        .padding(16)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 16)
                     }
                     .scrollIndicators(.hidden)
                     .scrollContentBackground(.hidden)
@@ -175,7 +179,7 @@ struct CatalogView: View {
             .searchable(text: $viewModel.searchText, prompt: "搜索番号或标题")
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .bottom) {
                 HStack {
                     Text(viewModel.statusMessage)
@@ -214,7 +218,7 @@ private struct CatalogGridCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            poster(height: 112, cornerRadius: 10)
+            poster(cornerRadius: 10)
             Text(item.catalog.isEmpty ? "未识别番号" : item.catalog)
                 .font(.subheadline.bold())
                 .foregroundStyle(.primary)
@@ -228,7 +232,7 @@ private struct CatalogGridCard: View {
         }
     }
 
-    private func poster(height: CGFloat, cornerRadius: CGFloat) -> some View {
+    private func poster(cornerRadius: CGFloat) -> some View {
         ZStack(alignment: .bottomLeading) {
             KFImage(viewModel.client().proxiedImageURL(item.imageURL))
                 .placeholder {
@@ -240,8 +244,7 @@ private struct CatalogGridCard: View {
                 }
                 .resizable()
                 .scaledToFill()
-                .frame(maxWidth: .infinity)
-                .frame(height: height)
+                .aspectRatio(16.0 / 9.0, contentMode: .fill)
                 .clipped()
                 .blur(radius: viewModel.isPrivacyModeEnabled ? 10 : 0)
             LinearGradient(colors: [.clear, .black.opacity(0.74)], startPoint: .center, endPoint: .bottom)
@@ -254,6 +257,7 @@ private struct CatalogGridCard: View {
                     .padding(8)
             }
         }
+        .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }

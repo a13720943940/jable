@@ -55,6 +55,57 @@ struct LicenseInfo: Codable {
     }
 }
 
+struct LicenseAdminSummary: Codable {
+    let ok: Bool?
+    let records: [LicenseAdminRecord]
+    let revoked: [String]
+    let updatedAt: Double?
+    let onlineCount: Int
+    let recordCount: Int
+    let revokedCount: Int
+    let baseURL: String?
+    let revocationURL: String?
+    let issued: String?
+    let expiresText: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ok, records, revoked, issued
+        case updatedAt = "updated_at"
+        case onlineCount = "online_count"
+        case recordCount = "record_count"
+        case revokedCount = "revoked_count"
+        case baseURL = "base_url"
+        case revocationURL = "revocation_url"
+        case expiresText = "expires_text"
+    }
+}
+
+struct LicenseAdminRecord: Codable, Identifiable {
+    var id: String { deviceID }
+    let deviceID: String
+    let owner: String
+    let code: String
+    let days: Int
+    let issuedAt: Double?
+    let expiresAt: Double?
+    let lastSeen: Double?
+    let lastIP: String
+    let hostname: String
+    let appVersion: String
+    let online: Bool
+    let revoked: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case owner, code, days, online, revoked, hostname
+        case deviceID = "device_id"
+        case issuedAt = "issued_at"
+        case expiresAt = "expires_at"
+        case lastSeen = "last_seen"
+        case lastIP = "last_ip"
+        case appVersion = "app_version"
+    }
+}
+
 struct AccessInfo: Codable {
     let ok: Bool?
     let configured: Bool
@@ -578,6 +629,41 @@ extension JableDetail {
     }
 }
 
+extension LicenseAdminSummary {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try? c.decodeIfPresent(Bool.self, forKey: .ok)
+        records = (try? c.decode([LicenseAdminRecord].self, forKey: .records)) ?? []
+        revoked = (try? c.decode([String].self, forKey: .revoked)) ?? []
+        updatedAt = try? c.decodeIfPresent(Double.self, forKey: .updatedAt)
+        onlineCount = c.decodeInt(.onlineCount)
+        recordCount = c.decodeInt(.recordCount)
+        revokedCount = c.decodeInt(.revokedCount)
+        baseURL = c.decodeStringIfPresent(.baseURL)
+        revocationURL = c.decodeStringIfPresent(.revocationURL)
+        issued = c.decodeStringIfPresent(.issued)
+        expiresText = c.decodeStringIfPresent(.expiresText)
+    }
+}
+
+extension LicenseAdminRecord {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        deviceID = c.decodeString(.deviceID)
+        owner = c.decodeString(.owner)
+        code = c.decodeString(.code)
+        days = c.decodeInt(.days)
+        issuedAt = try? c.decodeIfPresent(Double.self, forKey: .issuedAt)
+        expiresAt = try? c.decodeIfPresent(Double.self, forKey: .expiresAt)
+        lastSeen = try? c.decodeIfPresent(Double.self, forKey: .lastSeen)
+        lastIP = c.decodeString(.lastIP)
+        hostname = c.decodeString(.hostname)
+        appVersion = c.decodeString(.appVersion)
+        online = c.decodeBool(.online)
+        revoked = c.decodeBool(.revoked)
+    }
+}
+
 extension LocalVideoItem {
     enum CodingKeys: String, CodingKey { case id, title, poster }
 
@@ -802,7 +888,7 @@ struct APIClient {
         configuration.httpAdditionalHeaders = [
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.7",
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1 JableMediaLibrary/1.0.3"
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1 JableMediaLibrary/1.0.4"
         ]
         return URLSession(configuration: configuration)
     }()
@@ -1215,6 +1301,122 @@ struct APIClient {
             return "iOS 阻止了非安全连接，请安装包含 HTTP 权限的新版本。"
         default:
             return "网络请求失败：\(error.localizedDescription)（\(error.code.rawValue)）"
+        }
+    }
+}
+
+struct LicenseConsoleClient {
+    let baseURL: String
+    let password: String
+
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 25
+        configuration.waitsForConnectivity = false
+        configuration.allowsCellularAccess = true
+        configuration.allowsExpensiveNetworkAccess = true
+        configuration.allowsConstrainedNetworkAccess = true
+        configuration.httpAdditionalHeaders = [
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.7",
+            "User-Agent": "JableMediaLibrary/1.0.5 iOS"
+        ]
+        return URLSession(configuration: configuration)
+    }()
+
+    private var normalizedBaseURL: String {
+        var value = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty, !value.hasPrefix("http://"), !value.hasPrefix("https://") {
+            value = "http://" + value
+        }
+        return value.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    func health() async throws -> OKResponse {
+        try await request(path: "/api/admin/health", method: "GET")
+    }
+
+    func summary() async throws -> LicenseAdminSummary {
+        try await request(path: "/api/admin/summary", method: "GET")
+    }
+
+    func issue(deviceID: String, owner: String, days: Int) async throws -> LicenseAdminSummary {
+        try await request(
+            path: "/api/admin/issue",
+            method: "POST",
+            body: ["device_id": deviceID, "owner": owner, "days": max(0, days)]
+        )
+    }
+
+    func revoke(deviceID: String) async throws -> LicenseAdminSummary {
+        try await request(path: "/api/admin/revoke", method: "POST", body: ["device_id": deviceID])
+    }
+
+    func unrevoke(deviceID: String) async throws -> LicenseAdminSummary {
+        try await request(path: "/api/admin/unrevoke", method: "POST", body: ["device_id": deviceID])
+    }
+
+    func deleteRecord(deviceID: String) async throws -> LicenseAdminSummary {
+        try await request(path: "/api/admin/delete-record", method: "POST", body: ["device_id": deviceID])
+    }
+
+    private func makeURL(path: String) throws -> URL {
+        guard !normalizedBaseURL.isEmpty, let url = URL(string: normalizedBaseURL + path) else {
+            throw APIError.invalidURL
+        }
+        return url
+    }
+
+    private func request<T: Decodable>(path: String, method: String, body: [String: Any]? = nil) async throws -> T {
+        var request = URLRequest(url: try makeURL(path: path))
+        request.httpMethod = method
+        request.timeoutInterval = 15
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.setValue(password.trimmingCharacters(in: .whitespacesAndNewlines), forHTTPHeaderField: "X-License-Password")
+        if let body {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await Self.session.data(for: request)
+        } catch let error as URLError {
+            throw APIError.transport(Self.transportMessage(for: error, baseURL: normalizedBaseURL))
+        } catch {
+            throw APIError.transport("连接失败：\(error.localizedDescription)")
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidPayload
+        }
+        if (200 ..< 300).contains(http.statusCode) {
+            do {
+                return try JSONDecoder().decode(T.self, from: data)
+            } catch {
+                throw APIError.invalidPayload
+            }
+        }
+        if let message = try? JSONDecoder().decode([String: String].self, from: data) {
+            throw APIError.badServerResponse(message["message"] ?? message["error"] ?? "授权控制台返回错误：HTTP \(http.statusCode)")
+        }
+        throw APIError.badServerResponse("授权控制台返回错误：HTTP \(http.statusCode)")
+    }
+
+    private static func transportMessage(for error: URLError, baseURL: String) -> String {
+        switch error.code {
+        case .timedOut:
+            return "授权控制台连接超时。请确认手机能访问 \(baseURL)/healthz，并检查端口 8789 是否对外开放。"
+        case .cannotFindHost, .dnsLookupFailed:
+            return "无法解析授权控制台域名，请检查地址或 DNS。"
+        case .cannotConnectToHost:
+            return "无法连接授权控制台端口，请确认 8789 服务正在运行。"
+        case .notConnectedToInternet:
+            return "当前设备没有可用网络。"
+        case .appTransportSecurityRequiresSecureConnection:
+            return "iOS 阻止了 HTTP 连接，请安装包含 HTTP 权限的新版本。"
+        default:
+            return "授权控制台请求失败：\(error.localizedDescription)（\(error.code.rawValue)）"
         }
     }
 }

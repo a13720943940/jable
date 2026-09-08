@@ -150,6 +150,45 @@ def auth(f):
     return wrapper
 
 
+def api_auth(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        bearer = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
+        header_password = request.headers.get("X-License-Password", "")
+        if not (hmac.compare_digest(header_password, PASSWORD) or hmac.compare_digest(bearer, PASSWORD)):
+            return {"ok": False, "error": "授权控制台密码错误或未填写"}, 401
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def records_snapshot():
+    rev = load_rev()
+    revoked_set = set(rev["revoked"])
+    records = sorted(load_records(), key=lambda r: (r.get("last_seen") or 0, r.get("issued_at", 0)), reverse=True)
+    now = int(time.time())
+    online_set = {r["device_id"] for r in records
+                  if r.get("last_seen") and now - int(r["last_seen"]) <= ONLINE_WINDOW}
+    enriched = []
+    for record in records:
+        item = dict(record)
+        device_id = str(item.get("device_id", "")).strip()
+        item["online"] = device_id in online_set
+        item["revoked"] = device_id in revoked_set
+        enriched.append(item)
+    return {
+        "ok": True,
+        "records": enriched,
+        "revoked": rev["revoked"],
+        "updated_at": rev["updated_at"],
+        "online_count": len(online_set),
+        "record_count": len(records),
+        "revoked_count": len(rev["revoked"]),
+        "base_url": request.host_url.rstrip("/"),
+        "revocation_url": request.host_url.rstrip("/") + "/revocation.json",
+    }
+
+
 PAGE = """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NASSAV 授权管理</title>
@@ -328,6 +367,77 @@ button{width:100%;background:#2563eb;color:#fff;border:0;border-radius:8px;paddi
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+@app.get("/api/admin/health")
+@api_auth
+def api_admin_health():
+    return {"ok": True, "service": "nassav-license-server"}
+
+
+@app.get("/api/admin/summary")
+@api_auth
+def api_admin_summary():
+    return records_snapshot()
+
+
+@app.post("/api/admin/issue")
+@api_auth
+def api_admin_issue():
+    data = request.get_json(silent=True) or {}
+    device_id = str(data.get("device_id", "")).strip()
+    owner = str(data.get("owner", "")).strip()
+    try:
+        days = int(str(data.get("days", "0")).strip() or 0)
+    except ValueError:
+        days = -1
+    if len(device_id) < 8:
+        return {"ok": False, "error": "设备码格式不正确"}, 400
+    if days < 0:
+        return {"ok": False, "error": "有效期天数不正确"}, 400
+    code = issue(device_id, days)
+    upsert_record(device_id, owner, code, days)
+    payload = records_snapshot()
+    payload.update({
+        "issued": code,
+        "expires_text": "永久有效" if days == 0 else f"{days} 天",
+    })
+    return payload
+
+
+@app.post("/api/admin/revoke")
+@api_auth
+def api_admin_revoke():
+    data = request.get_json(silent=True) or {}
+    device_id = str(data.get("device_id", "")).strip()
+    if len(device_id) < 8:
+        return {"ok": False, "error": "设备码格式不正确"}, 400
+    rev = load_rev()
+    save_rev(list(rev["revoked"]) + [device_id])
+    return records_snapshot()
+
+
+@app.post("/api/admin/unrevoke")
+@api_auth
+def api_admin_unrevoke():
+    data = request.get_json(silent=True) or {}
+    device_id = str(data.get("device_id", "")).strip()
+    if len(device_id) < 8:
+        return {"ok": False, "error": "设备码格式不正确"}, 400
+    rev = load_rev()
+    save_rev([d for d in rev["revoked"] if d != device_id])
+    return records_snapshot()
+
+
+@app.post("/api/admin/delete-record")
+@api_auth
+def api_admin_delete_record():
+    data = request.get_json(silent=True) or {}
+    device_id = str(data.get("device_id", "")).strip()
+    if len(device_id) < 8:
+        return {"ok": False, "error": "设备码格式不正确"}, 400
+    save_records([r for r in load_records() if r.get("device_id") != device_id])
+    return records_snapshot()
 
 
 @app.route("/login", methods=["GET", "POST"])
