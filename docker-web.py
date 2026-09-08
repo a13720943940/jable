@@ -138,6 +138,9 @@ DEFAULT_SETTINGS = {
     "site_password_hash": "",
     # 115 播放方式: proxy=后端代理流式(默认), redirect=302 直连(浏览器直连 115 CDN,不占后端带宽)
     "cloud115_play_mode": "proxy",
+    # 115 自动签到：cron 五段格式，默认每天 08:00 执行
+    "cloud115_signin_enabled": False,
+    "cloud115_signin_cron": "0 8 * * *",
     # 自动离线到 115: 模式A=浏览详情自动离线, 模式B=定时追新扫描
     "auto_offline_enabled": False,
     "auto_offline_browse": True,      # 模式 A:打开详情时命中规则自动离线
@@ -410,6 +413,13 @@ def initialize():
             )
         """)
         db.execute("""
+            CREATE TABLE IF NOT EXISTS cloud115_signin_log (
+                id TEXT PRIMARY KEY, created_at TEXT NOT NULL, state TEXT NOT NULL,
+                message TEXT NOT NULL DEFAULT '', reward TEXT NOT NULL DEFAULT '',
+                raw TEXT NOT NULL DEFAULT ''
+            )
+        """)
+        db.execute("""
             CREATE TABLE IF NOT EXISTS app_logs (
                 id TEXT PRIMARY KEY, created_at TEXT NOT NULL, level TEXT NOT NULL,
                 module TEXT NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL DEFAULT '',
@@ -505,6 +515,49 @@ def store_setting(key, value):
     with db_lock, connect() as db:
         db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)",
                    (key, json.dumps(value, ensure_ascii=False)))
+
+
+def _cron_field_valid(expr, low, high):
+    for token in str(expr).split(","):
+        token = token.strip()
+        if not token:
+            return False
+        if token == "*":
+            continue
+        base = token
+        if "/" in token:
+            base, step = token.split("/", 1)
+            if not step.isdigit() or int(step) <= 0:
+                return False
+        if base == "*":
+            continue
+        if "-" in base:
+            start, end = base.split("-", 1)
+            if not (start.isdigit() and end.isdigit()):
+                return False
+            if int(start) > int(end) or int(start) < low or int(end) > high:
+                return False
+            continue
+        if not base.isdigit():
+            return False
+        value = int(base)
+        if value < low or value > high:
+            return False
+    return True
+
+
+def normalize_cron_expression(value):
+    text = str(value or "").strip()
+    if re.fullmatch(r"\d{1,2}:\d{2}", text):
+        hour, minute = text.split(":", 1)
+        text = f"{int(minute)} {int(hour)} * * *"
+    parts = text.split()
+    if len(parts) != 5:
+        return "0 8 * * *"
+    ranges = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 7)]
+    if not all(_cron_field_valid(part, low, high) for part, (low, high) in zip(parts, ranges)):
+        return "0 8 * * *"
+    return " ".join(parts)
 
 
 def update_task(task_id, **values):
@@ -993,6 +1046,10 @@ def save_settings(values):
     settings["cloud115_play_mode"] = str(settings.get("cloud115_play_mode", "proxy")).strip()
     if settings["cloud115_play_mode"] not in ("proxy", "redirect"):
         settings["cloud115_play_mode"] = "proxy"
+    settings["cloud115_signin_enabled"] = bool(settings.get("cloud115_signin_enabled", False))
+    settings["cloud115_signin_cron"] = normalize_cron_expression(
+        str(settings.get("cloud115_signin_cron", "0 8 * * *") or "0 8 * * *")
+    )
     try:
         settings["cloud_ad_min_mb"] = min(500.0, max(0.0, float(settings.get("cloud_ad_min_mb", 0))))
     except (TypeError, ValueError):
@@ -1911,6 +1968,27 @@ def auto_offline_scheduler():
         time.sleep(300)
 
 
+def cloud115_signin_scheduler():
+    """115 自动签到调度线程：按 cron 表达式匹配分钟，避免同一分钟重复执行。"""
+    last_key = ""
+    while True:
+        try:
+            settings = get_settings()
+            if bool(settings.get("cloud115_signin_enabled", False)):
+                cron_expr = normalize_cron_expression(settings.get("cloud115_signin_cron", "0 8 * * *"))
+                now = datetime.now()
+                run_key = now.strftime("%Y%m%d%H%M")
+                if run_key != last_key and cron_matches_now(cron_expr, now):
+                    last_key = run_key
+                    try:
+                        run_115_signin(trigger="cron")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        time.sleep(30)
+
+
 def qr_cookie_string(value):
     if isinstance(value, str):
         return value.strip()
@@ -2471,6 +2549,100 @@ def _115_request(cookie, url, data=None, ua=None):
                      or reply.get("msg") or raw[:120] or "115 API 调用失败")
         raise RuntimeError(f"115 API 调用失败：{reason[:180]}")
     return reply
+
+
+def _cron_field_matches(expr, value):
+    for token in str(expr).split(","):
+        token = token.strip()
+        if not token:
+            continue
+        base = token
+        step = 1
+        if "/" in token:
+            base, raw_step = token.split("/", 1)
+            step = max(1, int(raw_step))
+        if base == "*":
+            start, end = 0, value
+        elif "-" in base:
+            start, end = [int(item) for item in base.split("-", 1)]
+        else:
+            start = end = int(base)
+        if start <= value <= end and (value - start) % step == 0:
+            return True
+    return False
+
+
+def cron_matches_now(expr, now=None):
+    current = now or datetime.now()
+    parts = normalize_cron_expression(expr).split()
+    dow = (current.weekday() + 1) % 7
+    return (
+        _cron_field_matches(parts[0], current.minute)
+        and _cron_field_matches(parts[1], current.hour)
+        and _cron_field_matches(parts[2], current.day)
+        and _cron_field_matches(parts[3], current.month)
+        and (_cron_field_matches(parts[4], dow) or (dow == 0 and _cron_field_matches(parts[4], 7)))
+    )
+
+
+def _record_115_signin(state, message, reward="", raw=""):
+    rec_id = uuid.uuid4().hex
+    now = datetime.now().isoformat(timespec="seconds")
+    with db_lock, connect() as db:
+        db.execute(
+            "INSERT INTO cloud115_signin_log(id,created_at,state,message,reward,raw) VALUES(?,?,?,?,?,?)",
+            (rec_id, now, state, str(message or "")[:500], str(reward or "")[:120], str(raw or "")[:2000])
+        )
+        db.execute("DELETE FROM cloud115_signin_log WHERE id NOT IN (SELECT id FROM cloud115_signin_log ORDER BY created_at DESC LIMIT 120)")
+    return {"id": rec_id, "created_at": now, "state": state, "message": message, "reward": reward}
+
+
+def run_115_signin(trigger="manual"):
+    settings = get_settings()
+    if str(settings.get("cloud115_mode", "bridge")) != "cookie":
+        raise RuntimeError("115 自动签到需要 Cookie 直连模式")
+    cookie = str(settings.get("cloud115_cookie", "") or "").strip()
+    if not cookie:
+        raise RuntimeError("尚未保存 115 Cookie")
+    endpoints = [
+        ("https://115.com/?ct=ajax_user&ac=checkin", b""),
+        ("https://proapi.115.com/android/2.0/user/points_sign", None),
+    ]
+    last_error = ""
+    for url, data in endpoints:
+        try:
+            reply = _115_request(cookie, url, data=data)
+            data_obj = reply.get("data") if isinstance(reply.get("data"), dict) else {}
+            message = str(
+                reply.get("message")
+                or reply.get("msg")
+                or data_obj.get("message")
+                or data_obj.get("msg")
+                or "115 签到成功"
+            )
+            reward = str(
+                data_obj.get("points")
+                or data_obj.get("score")
+                or data_obj.get("reward")
+                or data_obj.get("continuity_day")
+                or ""
+            )
+            rec = _record_115_signin("success", message, reward=reward, raw=json.dumps(reply, ensure_ascii=False))
+            write_app_log("success", "115", "signin", f"115 签到成功（{trigger}）：{message}", detail=json.dumps(reply, ensure_ascii=False)[:500])
+            return rec
+        except Exception as error:
+            last_error = str(error)
+    rec = _record_115_signin("failed", f"115 签到失败：{last_error[:180]}")
+    write_app_log("error", "115", "signin", "115 签到失败", detail=last_error[:500])
+    raise RuntimeError(rec["message"])
+
+
+def list_115_signin_logs(limit=30):
+    safe_limit = min(120, max(1, int(limit or 30)))
+    return rows(
+        "SELECT id,created_at,state,message,reward FROM cloud115_signin_log ORDER BY created_at DESC LIMIT ?",
+        (safe_limit,)
+    )
 
 
 def list_115_nodes(cookie, cid):
@@ -4613,6 +4785,41 @@ def check_115_login():
     except Exception as error:
         write_app_log("error", "115", "check-login", "无法连接中转服务", detail=str(error), target=endpoint)
         return jsonify(ok=False, message=f"无法连接中转服务：{str(error)[:180]}")
+
+
+@app.get("/api/115/signin")
+def api_115_signin_status():
+    settings = get_settings()
+    return jsonify(
+        ok=True,
+        enabled=bool(settings.get("cloud115_signin_enabled", False)),
+        cron=str(settings.get("cloud115_signin_cron", "0 8 * * *") or "0 8 * * *"),
+        logs=list_115_signin_logs(int(request.args.get("limit", "30") or 30))
+    )
+
+
+@app.post("/api/115/signin")
+def api_115_signin_now():
+    try:
+        record = run_115_signin(trigger="manual")
+        settings = get_settings()
+        return jsonify(
+            ok=True,
+            enabled=bool(settings.get("cloud115_signin_enabled", False)),
+            cron=str(settings.get("cloud115_signin_cron", "0 8 * * *") or "0 8 * * *"),
+            message=record["message"],
+            record=record,
+            logs=list_115_signin_logs(30)
+        )
+    except Exception as error:
+        settings = get_settings()
+        return jsonify(
+            ok=False,
+            enabled=bool(settings.get("cloud115_signin_enabled", False)),
+            cron=str(settings.get("cloud115_signin_cron", "0 8 * * *") or "0 8 * * *"),
+            message=str(error)[:220],
+            logs=list_115_signin_logs(30)
+        ), 502
 
 
 @app.get("/api/tasks")
@@ -7232,6 +7439,7 @@ threading.Thread(target=_hg_publish_warmup, daemon=True, name="hg-publish-warmup
 threading.Thread(target=watch_folder, daemon=True, name="watch-folder").start()
 threading.Thread(target=poll_cloud_tasks, daemon=True, name="poll-cloud").start()
 threading.Thread(target=auto_offline_scheduler, daemon=True, name="auto-offline-scheduler").start()
+threading.Thread(target=cloud115_signin_scheduler, daemon=True, name="cloud115-signin-scheduler").start()
 
 
 if __name__ == "__main__":

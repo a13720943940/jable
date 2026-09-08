@@ -36,6 +36,7 @@ type Settings = {
   cloud_transfer_enabled?: boolean; cloud_transfer_path?: string; cloud_transfer_cid?: string; cloud_poll_interval?: number; cloud_ad_min_mb?: number;
   auto_strm_enabled?: boolean; service_base_url?: string; strm_root_dir?: string;
   cloud115_play_mode?: 'proxy' | 'redirect';
+  cloud115_signin_enabled?: boolean; cloud115_signin_cron?: string;
   auto_offline_enabled?: boolean; auto_offline_browse?: boolean; auto_offline_schedule?: boolean;
   auto_offline_interval?: number; auto_offline_pages?: number; auto_offline_whitelist?: string;
   auto_offline_min_duration?: number; auto_offline_min_size?: number; auto_offline_daily_limit?: number;
@@ -62,6 +63,8 @@ type HgEpisode = {
 }
 type HgCatalogItem = { id: string; title: string; cover_url: string; remark: string; detail_url: string }
 type HgCatalogReply = { items: HgCatalogItem[]; tabs: { name: string; id: string }[]; page: number; query: string; source_url: string }
+type SigninLog = { id: string; created_at: string; state: string; message: string; reward?: string }
+type SigninStatus = { ok: boolean; enabled: boolean; cron: string; logs: SigninLog[]; message?: string }
 
 // 后端在未授权时对 index.html 注入 window.__UNLICENSED__；api 层短路，避免锁页期间重复请求/报错
 let __unlicensed = (window as unknown as { __UNLICENSED__?: boolean }).__UNLICENSED__ === true
@@ -355,6 +358,8 @@ function App() {
   const [qrInfo, setQrInfo] = useState<QRInfo | null>(null)
   const [qrClient, setQrClient] = useState('web')
   const [check115Loading, setCheck115Loading] = useState(false)
+  const [signinLoading, setSigninLoading] = useState(false)
+  const [signinStatus, setSigninStatus] = useState<SigninStatus | null>(null)
   const [adCleanupLoading, setAdCleanupLoading] = useState(false)
   const [check115Result, setCheck115Result] = useState<{ ok: boolean; message: string } | null>(null)
   const [settings, setSettings] = useState<Settings | null>(loadCache<Settings>(CACHE_KEYS.settings) || null)
@@ -485,7 +490,7 @@ function App() {
   // 启动:有缓存就静默刷新(films 不带 refresh 走后端缓存),没缓存才显示 loading
   useEffect(() => {
     if (page === 'medialib') { loadStrmLibrary() }
-    if (page === 'settings') { reloadSettingsForm() }
+    if (page === 'settings') { reloadSettingsForm(); loadSigninStatus() }
   }, [page])
   useEffect(() => {
     // 隐私模式效果
@@ -608,6 +613,20 @@ function App() {
     } catch (error) {
       setCheck115Result({ ok: false, message: error instanceof Error ? error.message : '检测失败' })
     } finally { setCheck115Loading(false) }
+  }
+  const loadSigninStatus = async () => {
+    try { setSigninStatus(await api<SigninStatus>('/api/115/signin')) } catch { /* ignore */ }
+  }
+  const run115Signin = async () => {
+    setSigninLoading(true)
+    try {
+      const result = await api<SigninStatus>('/api/115/signin', { method: 'POST' })
+      setSigninStatus(result)
+      message.success(result.message || result.logs?.[0]?.message || '115 签到完成')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '115 签到失败')
+      loadSigninStatus()
+    } finally { setSigninLoading(false) }
   }
   const chooseFilm = (film: Film) => { setSelected(film); setCaptured(null); setFilmDetail(null) }
   useEffect(() => {
@@ -813,6 +832,7 @@ function App() {
                 ]} />
               </Form>
             </Card>
+            <Cloud115SigninPanel status={signinStatus} loading={signinLoading} onRefresh={loadSigninStatus} onRun={run115Signin} />
           </>}
         </Layout.Content>
       </Layout>
@@ -993,6 +1013,52 @@ function Dir115TreeSelect({ value, onChange, onPathChange, placeholder = '选择
     />
     {error && <Alert type="warning" showIcon style={{ marginTop: 6 }} message={error} action={<Button size="small" icon={<ReloadOutlined />} onClick={loadRoot}>重新加载</Button>} />}
   </>
+}
+
+function Cloud115SigninPanel({ status, loading, onRefresh, onRun }: {
+  status: SigninStatus | null; loading: boolean; onRefresh: () => void; onRun: () => void
+}) {
+  const [enabled, setEnabled] = useState(false)
+  const [cron, setCron] = useState('0 8 * * *')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    if (!status) return
+    setEnabled(!!status.enabled)
+    setCron(status.cron || '0 8 * * *')
+  }, [status?.enabled, status?.cron])
+  const save = async () => {
+    setSaving(true)
+    try {
+      await api('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cloud115_signin_enabled: enabled, cloud115_signin_cron: cron })
+      })
+      message.success('115 自动签到设置已保存')
+      onRefresh()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return <Card size="small" title={<Space>115 自动签到{enabled ? <Tag color="success">已开启</Tag> : <Tag>未开启</Tag>}</Space>} style={{ marginTop: 16 }}>
+    <Alert type="info" showIcon message="需要 Cookie 直连模式" description="扫码登录或填写 115 Cookie 后可用。cron 为五段格式：分钟 小时 日期 月份 星期，例如 0 8 * * * 表示每天 08:00。" style={{ marginBottom: 14 }} />
+    <Space wrap align="start" size={12}>
+      <Switch checked={enabled} onChange={setEnabled} checkedChildren="自动签到" unCheckedChildren="关闭" />
+      <Input value={cron} onChange={e => setCron(e.target.value)} placeholder="0 8 * * *" style={{ width: 180 }} />
+      <Button icon={<SettingOutlined />} loading={saving} onClick={save}>保存签到设置</Button>
+      <Button type="primary" icon={<CheckCircleOutlined />} loading={loading} onClick={onRun}>立即签到</Button>
+      <Button icon={<ReloadOutlined />} onClick={onRefresh}>刷新记录</Button>
+    </Space>
+    <Divider orientation="left" plain>签到记录</Divider>
+    {status?.logs?.length ? <List size="small" dataSource={status.logs} renderItem={log => <List.Item>
+      <List.Item.Meta
+        title={<Space wrap><Tag color={log.state === 'success' ? 'success' : 'error'}>{log.state === 'success' ? '成功' : '失败'}</Tag><Typography.Text>{log.message}</Typography.Text>{log.reward && <Tag color="blue">{log.reward}</Tag>}</Space>}
+        description={log.created_at}
+      />
+    </List.Item>} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无签到记录" />}
+  </Card>
 }
 
 // 路径配置:四条管线各一张卡片(内容展开),每张卡内的「配置说明」默认折叠

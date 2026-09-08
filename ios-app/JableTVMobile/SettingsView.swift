@@ -141,6 +141,52 @@ struct SettingsView: View {
                         )
                         .foregroundStyle(viewModel.check115OK == true ? .green : .red)
                     }
+
+                    Toggle("115 自动签到", isOn: boolBinding(\.cloud115SigninEnabled, defaultValue: false))
+
+                    TextField("签到 cron，例如 0 8 * * *", text: stringBinding(\.cloud115SigninCron, defaultValue: "0 8 * * *"))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    Button {
+                        Task { await viewModel.run115SigninNow() }
+                    } label: {
+                        if viewModel.isLoading115Signin {
+                            ProgressView()
+                        } else {
+                            Label("立即签到", systemImage: "checkmark.circle")
+                        }
+                    }
+
+                    Button {
+                        Task { await viewModel.refresh115SigninStatus() }
+                    } label: {
+                        Label("刷新签到记录", systemImage: "clock.arrow.circlepath")
+                    }
+
+                    if let logs = viewModel.cloud115SigninStatus?.logs, !logs.isEmpty {
+                        ForEach(logs.prefix(8)) { log in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(log.state == "success" ? "成功" : "失败")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(log.state == "success" ? .green : .red)
+                                    Spacer()
+                                    Text(log.createdAt)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text(log.message)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                if !log.reward.isEmpty {
+                                    Text("奖励：\(log.reward)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.blue)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Section("管线 A · 本地下载") {
@@ -270,6 +316,7 @@ struct SettingsView: View {
             .task {
                 await viewModel.refreshSettings()
                 await viewModel.refreshLicense()
+                await viewModel.refresh115SigninStatus()
             }
         }
     }

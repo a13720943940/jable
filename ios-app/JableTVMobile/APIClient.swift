@@ -340,6 +340,8 @@ struct AppSettings: Codable {
     var watchInterval: Int?
     var cloud115Token: String?
     var cloud115PlayMode: String?
+    var cloud115SigninEnabled: Bool?
+    var cloud115SigninCron: String?
     var cloudTransferEnabled: Bool?
     var cloudTransferPath: String?
     var cloudTransferCid: String?
@@ -391,6 +393,8 @@ struct AppSettings: Codable {
         case watchInterval = "watch_interval"
         case cloud115Token = "cloud115_token"
         case cloud115PlayMode = "cloud115_play_mode"
+        case cloud115SigninEnabled = "cloud115_signin_enabled"
+        case cloud115SigninCron = "cloud115_signin_cron"
         case cloudTransferEnabled = "cloud_transfer_enabled"
         case cloudTransferPath = "cloud_transfer_path"
         case cloudTransferCid = "cloud_transfer_cid"
@@ -560,6 +564,31 @@ struct TaskCreationResponse: Codable {
 struct LoginCheckResponse: Codable {
     let ok: Bool
     let message: String
+}
+
+struct Cloud115SigninStatus: Codable {
+    let ok: Bool?
+    let enabled: Bool
+    let cron: String
+    let logs: [Cloud115SigninLog]
+    let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ok, enabled, cron, logs, message
+    }
+}
+
+struct Cloud115SigninLog: Codable, Identifiable {
+    let id: String
+    let createdAt: String
+    let state: String
+    let message: String
+    let reward: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, state, message, reward
+        case createdAt = "created_at"
+    }
 }
 
 extension KeyedDecodingContainer {
@@ -980,6 +1009,8 @@ struct APIClient {
         if let watchInterval = settings.watchInterval { object["watch_interval"] = watchInterval }
         if let cloud115Token = settings.cloud115Token { object["cloud115_token"] = cloud115Token }
         if let cloud115PlayMode = settings.cloud115PlayMode { object["cloud115_play_mode"] = cloud115PlayMode }
+        if let cloud115SigninEnabled = settings.cloud115SigninEnabled { object["cloud115_signin_enabled"] = cloud115SigninEnabled }
+        if let cloud115SigninCron = settings.cloud115SigninCron { object["cloud115_signin_cron"] = cloud115SigninCron }
         if let cloudTransferEnabled = settings.cloudTransferEnabled { object["cloud_transfer_enabled"] = cloudTransferEnabled }
         if let cloudTransferPath = settings.cloudTransferPath { object["cloud_transfer_path"] = cloudTransferPath }
         if let cloudTransferCid = settings.cloudTransferCid { object["cloud_transfer_cid"] = cloudTransferCid }
@@ -1168,6 +1199,14 @@ struct APIClient {
         try await request(path: "/api/115/check-login", method: "POST", body: [:])
     }
 
+    func cloud115SigninStatus() async throws -> Cloud115SigninStatus {
+        try await request(path: "/api/115/signin", method: "GET")
+    }
+
+    func runCloud115Signin() async throws -> Cloud115SigninStatus {
+        try await request(path: "/api/115/signin", method: "POST", body: [:])
+    }
+
     func createTask(url: String, title: String, catalog: String, performer: String, threads: Int, organizeEnabled: Bool, allowDuplicate: Bool) async throws -> TaskCreationResponse {
         try await request(
             path: "/api/tasks",
@@ -1302,6 +1341,28 @@ struct APIClient {
         default:
             return "网络请求失败：\(error.localizedDescription)（\(error.code.rawValue)）"
         }
+    }
+}
+
+extension Cloud115SigninStatus {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try? c.decodeIfPresent(Bool.self, forKey: .ok)
+        enabled = c.decodeBool(.enabled)
+        cron = c.decodeString(.cron)
+        logs = (try? c.decode([Cloud115SigninLog].self, forKey: .logs)) ?? []
+        message = c.decodeStringIfPresent(.message)
+    }
+}
+
+extension Cloud115SigninLog {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.decodeString(.id)
+        createdAt = c.decodeString(.createdAt)
+        state = c.decodeString(.state)
+        message = c.decodeString(.message)
+        reward = c.decodeString(.reward)
     }
 }
 

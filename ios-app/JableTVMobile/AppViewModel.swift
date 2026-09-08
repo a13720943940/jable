@@ -42,6 +42,8 @@ final class AppViewModel: ObservableObject {
     @Published var isChecking115Login = false
     @Published var check115Message = ""
     @Published var check115OK: Bool?
+    @Published var cloud115SigninStatus: Cloud115SigninStatus?
+    @Published var isLoading115Signin = false
     @Published var searchText = ""
     @Published var mediaSearchText = ""
     @Published var taskSearchText = ""
@@ -588,6 +590,28 @@ final class AppViewModel: ObservableObject {
             check115OK = false
             check115Message = error.localizedDescription
             statusMessage = error.localizedDescription
+        }
+    }
+
+    func refresh115SigninStatus() async {
+        do {
+            cloud115SigninStatus = try await client().cloud115SigninStatus()
+            settings.cloud115SigninEnabled = cloud115SigninStatus?.enabled
+            settings.cloud115SigninCron = cloud115SigninStatus?.cron
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    func run115SigninNow() async {
+        isLoading115Signin = true
+        defer { isLoading115Signin = false }
+        do {
+            cloud115SigninStatus = try await client().runCloud115Signin()
+            statusMessage = cloud115SigninStatus?.logs.first?.message ?? "115 签到完成"
+        } catch {
+            statusMessage = error.localizedDescription
+            await refresh115SigninStatus()
         }
     }
 

@@ -43,6 +43,13 @@ struct HuangguoView: View {
                 }
                 .padding(16)
             }
+            .refreshable {
+                if selectedFilter == "catalog" {
+                    await viewModel.refreshHuangguoCatalog(force: true)
+                } else {
+                    await viewModel.refreshHuangguoSeries()
+                }
+            }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $viewModel.huangguoSearchText, prompt: "搜索短剧名称")
@@ -52,21 +59,6 @@ struct HuangguoView: View {
             .scrollContentBackground(.hidden)
             .background(LinearGradient(colors: [Color(.systemGroupedBackground), Color.orange.opacity(0.08), Color.blue.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task {
-                            if selectedFilter == "catalog" {
-                                await viewModel.refreshHuangguoCatalog(force: true)
-                            } else {
-                                await viewModel.refreshHuangguoSeries()
-                            }
-                        }
-                    } label: {
-                        Label("刷新", systemImage: "arrow.clockwise")
-                    }
-                }
-            }
             .safeAreaInset(edge: .bottom) {
                 Text(viewModel.statusMessage)
                     .font(.footnote)
