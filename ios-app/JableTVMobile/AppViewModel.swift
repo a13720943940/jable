@@ -5,6 +5,7 @@ import SwiftUI
 final class AppViewModel: ObservableObject {
     @Published var serverURL = ""
     @Published var accessPassword = ""
+    @Published var isConnected = false
     @Published var catalogItems: [CatalogItem] = []
     @Published var catalogPage = 1
     @Published var catalogHasNext = false
@@ -133,6 +134,7 @@ final class AppViewModel: ObservableObject {
     func configure(serverURL: String, accessPassword: String = "") {
         self.serverURL = normalized(serverURL)
         self.accessPassword = accessPassword
+        self.isConnected = false
     }
 
     func client() -> APIClient {
@@ -154,6 +156,7 @@ final class AppViewModel: ObservableObject {
 
     func refreshHealth() async {
         do {
+            statusMessage = "正在检测服务健康状态…"
             health = try await client().health()
             statusMessage = "服务已连接"
         } catch {
@@ -171,17 +174,39 @@ final class AppViewModel: ObservableObject {
     }
 
     func verifyConnection() async -> Bool {
-        await refreshHealth()
-        if health != nil { return true }
         do {
+            statusMessage = "1/4 正在连接服务…"
+            health = try await client().health()
+
+            statusMessage = "2/4 正在检查访问密码…"
+            let access = try await client().accessStatus()
+            if access.configured && !access.authenticated {
+                let password = accessPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !password.isEmpty else {
+                    statusMessage = "服务已启用访问密码，请输入访问密码后再连接"
+                    return false
+                }
+                statusMessage = "3/4 正在验证访问密码…"
+                let login = try await client().accessLogin(password: password)
+                guard login.authenticated else {
+                    statusMessage = login.message ?? "访问密码错误，无法连接"
+                    return false
+                }
+            } else {
+                statusMessage = "3/4 访问密码检查通过…"
+            }
+
+            statusMessage = "4/4 正在读取影片列表…"
             let response = try await client().catalog(page: 1, force: false)
             catalogPage = response.page
             catalogHasNext = response.hasNext
             catalogPageSize = response.pageSize
             catalogItems = response.items
             statusMessage = "服务已连接，已加载第 \(response.page) 页"
+            isConnected = true
             return true
         } catch {
+            isConnected = false
             statusMessage = error.localizedDescription
             return false
         }

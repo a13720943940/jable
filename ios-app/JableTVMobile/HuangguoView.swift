@@ -172,19 +172,19 @@ struct HuangguoView: View {
 
     private var seriesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 10) {
                 Button {
                     Task { await viewModel.runHuangguoAction(.retryFailedAll) }
                 } label: {
-                    Label("重试失败", systemImage: "arrow.clockwise")
+                    actionPill("重试失败", systemImage: "arrow.clockwise", isPrimary: false)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
                 Button {
                     Task { await viewModel.runHuangguoAction(.downloadMissingAll) }
                 } label: {
-                    Label("下载缺失", systemImage: "icloud.and.arrow.down")
+                    actionPill("下载缺失", systemImage: "icloud.and.arrow.down", isPrimary: true)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
             }
 
             if viewModel.huangguoSeries.isEmpty {
@@ -240,6 +240,15 @@ struct HuangguoView: View {
                 }
             }
         }
+    }
+
+    private func actionPill(_ title: String, systemImage: String, isPrimary: Bool) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity)
+            .frame(height: 38)
+            .background(isPrimary ? Color.blue : Color.blue.opacity(0.12), in: Capsule())
+            .foregroundStyle(isPrimary ? .white : .blue)
     }
 
     private var manualAddSection: some View {

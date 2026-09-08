@@ -11,38 +11,39 @@ struct RootTabView: View {
     @State private var connectionInput = "http://192.168.2.50:8788"
     @State private var accessPasswordInput = ""
     @State private var isTestingConnection = false
+    @State private var connectionAlert: String?
 
     var body: some View {
         Group {
-            if viewModel.isConfigured {
+            if viewModel.isConnected {
                 TabView(selection: $viewModel.selectedTab) {
                     CatalogView()
                         .tabItem {
-                            Label("影片", systemImage: "square.grid.2x2.fill")
+                            Label("影片", systemImage: "rectangle.grid.1x2")
                         }
                         .tag(0)
 
                     MediaLibraryView()
                         .tabItem {
-                            Label("媒体库", systemImage: "play.rectangle.fill")
+                            Label("媒体库", systemImage: "play.square")
                         }
                         .tag(1)
 
                     HuangguoView()
                         .tabItem {
-                            Label("黄果", systemImage: "bolt.fill")
+                            Label("黄果", systemImage: "bolt.circle")
                         }
                         .tag(2)
 
                     TasksView()
                         .tabItem {
-                            Label("下载", systemImage: "arrow.down.circle.fill")
+                            Label("下载", systemImage: "arrow.down.square")
                         }
                         .tag(3)
 
                     SettingsView(onDisconnect: disconnect)
                         .tabItem {
-                            Label("设置", systemImage: "gearshape.fill")
+                            Label("设置", systemImage: "line.3.horizontal.circle")
                         }
                         .tag(4)
                 }
@@ -58,6 +59,14 @@ struct RootTabView: View {
             }
         }
         .tint(.blue)
+        .alert("连接失败", isPresented: Binding(
+            get: { connectionAlert != nil },
+            set: { if !$0 { connectionAlert = nil } }
+        )) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(connectionAlert ?? "")
+        }
         .fullScreenCover(item: Binding(
             get: { viewModel.playingURL.map { PlayRequest(id: $0.absoluteString, title: viewModel.playingTitle, url: $0) } },
             set: { value in
@@ -74,14 +83,9 @@ struct RootTabView: View {
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
             try? AVAudioSession.sharedInstance().setActive(true)
             if let saved = savedConfigurations.first, !saved.serverURL.isEmpty {
-                viewModel.configure(serverURL: saved.serverURL, accessPassword: saved.accessPassword ?? "")
                 connectionInput = saved.serverURL
                 accessPasswordInput = saved.accessPassword ?? ""
-                if let cache = cache(for: saved.serverURL, page: 1) {
-                    viewModel.applyCachedCatalog(cache)
-                }
-                await viewModel.refreshAll(refreshCatalog: viewModel.catalogItems.isEmpty)
-                saveCatalogCache()
+                viewModel.statusMessage = "请选择服务器并点击连接"
             }
         }
     }
@@ -190,11 +194,17 @@ struct RootTabView: View {
 
                         if !viewModel.statusMessage.isEmpty {
                             Text(viewModel.statusMessage)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                .font(.callout.weight(.semibold))
+                                .foregroundStyle(isTestingConnection ? .blue : .secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 4)
+                                .padding(14)
+                                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
+
+                        Text("版本 \(appVersion)（网络兼容版）")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                     .padding(.horizontal, 28)
                     .padding(.bottom, 120)
@@ -269,13 +279,22 @@ struct RootTabView: View {
         }
     }
 
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "-"
+        return "\(version) (\(build))"
+    }
+
     private func connect() async {
         isTestingConnection = true
         defer { isTestingConnection = false }
         let normalized = viewModel.normalized(connectionInput)
         let password = accessPasswordInput.trimmingCharacters(in: .whitespacesAndNewlines)
         viewModel.configure(serverURL: normalized, accessPassword: password)
-        guard await viewModel.verifyConnection() else { return }
+        guard await viewModel.verifyConnection() else {
+            connectionAlert = viewModel.statusMessage
+            return
+        }
         if let saved = configurations.first(where: { $0.serverURL == normalized }) {
             saved.serverURL = normalized
             saved.accessPassword = password
@@ -293,6 +312,7 @@ struct RootTabView: View {
 
     private func disconnect() {
         viewModel.serverURL = ""
+        viewModel.isConnected = false
         viewModel.health = nil
         viewModel.catalogItems = []
         connectionInput = ""

@@ -11,23 +11,10 @@ settings:
     PRODUCT_BUNDLE_IDENTIFIER: com.w.jabletvmobile
     PRODUCT_NAME: "jable"
     SWIFT_VERSION: "5.0"
-    CURRENT_PROJECT_VERSION: 1
-    MARKETING_VERSION: 1.0.0
-    GENERATE_INFOPLIST_FILE: YES
-    INFOPLIST_KEY_CFBundleDisplayName: "jable"
-    INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
-    INFOPLIST_KEY_UILaunchScreen_Generation: YES
-    INFOPLIST_KEY_UIRequiresFullScreen: YES
-    INFOPLIST_KEY_UISupportedInterfaceOrientations:
-      - UIInterfaceOrientationPortrait
-    INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad:
-      - UIInterfaceOrientationPortrait
-      - UIInterfaceOrientationLandscapeLeft
-      - UIInterfaceOrientationLandscapeRight
-    INFOPLIST_KEY_NSAppTransportSecurity:
-      NSAllowsArbitraryLoads: true
-      NSAllowsLocalNetworking: true
-    INFOPLIST_KEY_NSLocalNetworkUsageDescription: "用于连接本机或 Docker 下载服务。"
+    CURRENT_PROJECT_VERSION: 4
+    MARKETING_VERSION: 1.0.3
+    GENERATE_INFOPLIST_FILE: NO
+    INFOPLIST_FILE: JableTVMobile/Info.plist
 targets:
   JableTVMobile:
     type: application

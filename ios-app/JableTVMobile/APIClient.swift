@@ -55,6 +55,13 @@ struct LicenseInfo: Codable {
     }
 }
 
+struct AccessInfo: Codable {
+    let ok: Bool?
+    let configured: Bool
+    let authenticated: Bool
+    let message: String?
+}
+
 struct HeroStats: Codable {
     let cloudActive: Int
     let cloudDone: Int
@@ -762,6 +769,7 @@ enum APIError: LocalizedError {
     case invalidURL
     case badServerResponse(String)
     case invalidPayload
+    case transport(String)
 
     var errorDescription: String? {
         switch self {
@@ -771,6 +779,8 @@ enum APIError: LocalizedError {
             return message
         case .invalidPayload:
             return "服务返回了无法识别的数据。"
+        case .transport(let message):
+            return message
         }
     }
 }
@@ -778,6 +788,24 @@ enum APIError: LocalizedError {
 struct APIClient {
     let baseURL: String
     let accessPassword: String
+
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 25
+        configuration.waitsForConnectivity = false
+        configuration.allowsCellularAccess = true
+        configuration.allowsExpensiveNetworkAccess = true
+        configuration.allowsConstrainedNetworkAccess = true
+        configuration.httpShouldSetCookies = true
+        configuration.httpCookieAcceptPolicy = .always
+        configuration.httpAdditionalHeaders = [
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.7",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1 JableMediaLibrary/1.0.3"
+        ]
+        return URLSession(configuration: configuration)
+    }()
 
     private var normalizedBaseURL: String {
         baseURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -790,6 +818,14 @@ struct APIClient {
 
     func health() async throws -> HealthStatus {
         try await request(path: "/api/health", method: "GET")
+    }
+
+    func accessStatus() async throws -> AccessInfo {
+        try await request(path: "/api/access/status", method: "GET")
+    }
+
+    func accessLogin(password: String) async throws -> AccessInfo {
+        try await request(path: "/api/access/login", method: "POST", body: ["password": password])
     }
 
     func license() async throws -> LicenseInfo {
@@ -1126,7 +1162,8 @@ struct APIClient {
     private func request<T: Decodable>(path: String, method: String, body: [String: Any]? = nil) async throws -> T {
         var request = URLRequest(url: try makeURL(path: path))
         request.httpMethod = method
-        request.timeoutInterval = 60
+        request.timeoutInterval = 15
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         if let body {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -1134,7 +1171,15 @@ struct APIClient {
         if !accessPassword.isEmpty {
             request.setValue(accessPassword, forHTTPHeaderField: "X-Access-Password")
         }
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await Self.session.data(for: request)
+        } catch let error as URLError {
+            throw APIError.transport(Self.transportMessage(for: error, baseURL: normalizedBaseURL))
+        } catch {
+            throw APIError.transport("连接失败：\(error.localizedDescription)")
+        }
         guard let http = response as? HTTPURLResponse else {
             throw APIError.invalidPayload
         }
@@ -1145,10 +1190,32 @@ struct APIClient {
                 throw APIError.invalidPayload
             }
         }
+        if http.statusCode == 503 {
+            throw APIError.badServerResponse("服务网关暂时不可用（HTTP 503）。网页首页可能可打开，但 API 尚未转发成功。")
+        }
         if let message = try? JSONDecoder().decode([String: String].self, from: data) {
             throw APIError.badServerResponse(message["message"] ?? message["error"] ?? "服务返回错误：HTTP \(http.statusCode)")
         }
         throw APIError.badServerResponse("服务返回错误：HTTP \(http.statusCode)")
+    }
+
+    private static func transportMessage(for error: URLError, baseURL: String) -> String {
+        switch error.code {
+        case .timedOut:
+            return "连接超时。请在 Safari 打开 \(baseURL)/api/health；若首页能打开但该地址不能打开，说明服务器没有对外转发 API。"
+        case .cannotFindHost, .dnsLookupFailed:
+            return "无法解析服务器域名，请检查地址或 DNS 设置。"
+        case .cannotConnectToHost:
+            return "无法连接服务器端口，请确认服务和端口转发已开启。"
+        case .notConnectedToInternet:
+            return "当前设备没有可用网络。内网 IP 需要连接对应的 Wi-Fi。"
+        case .networkConnectionLost:
+            return "网络连接中断，请稍后重试。"
+        case .appTransportSecurityRequiresSecureConnection:
+            return "iOS 阻止了非安全连接，请安装包含 HTTP 权限的新版本。"
+        default:
+            return "网络请求失败：\(error.localizedDescription)（\(error.code.rawValue)）"
+        }
     }
 }
 

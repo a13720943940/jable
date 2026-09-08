@@ -8,7 +8,7 @@ struct MediaLibraryView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack {
                             Label("媒体库", systemImage: "play.square.stack.fill")
@@ -28,7 +28,7 @@ struct MediaLibraryView: View {
                     .background(Color.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
                     sourceSegmentedControl
-                        .padding(.top, 2)
+                        .padding(.top, 0)
 
                     if source == "all" || source == "115" {
                         VStack(alignment: .leading, spacing: 12) {
@@ -174,8 +174,9 @@ struct MediaLibraryView: View {
             sourceSegment("115", value: "115")
             sourceSegment("本地", value: "files")
         }
-        .padding(4)
-        .background(Color(.systemGray5).opacity(0.78), in: Capsule())
+        .padding(3)
+        .frame(height: 40)
+        .background(Color(.systemGray5).opacity(0.72), in: Capsule())
     }
 
     private func sourceSegment(_ title: String, value: String) -> some View {
@@ -185,9 +186,9 @@ struct MediaLibraryView: View {
             }
         } label: {
             Text(title)
-                .font(.headline.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity)
-                .frame(height: 42)
+                .frame(height: 34)
                 .background(source == value ? Color(.systemBackground) : Color.clear, in: Capsule())
                 .foregroundStyle(.primary)
         }
@@ -287,39 +288,10 @@ struct LocalLibraryDetailView: View {
                     }
                     .padding(.top, 86)
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("分集")
-                            .font(.title2.bold())
-
-                        LazyVGrid(columns: episodeColumns, spacing: 10) {
-                            ForEach(Array(series.episodes.enumerated()), id: \.element.id) { index, file in
-                                Button {
-                                    viewModel.play(title: file.name, url: viewModel.client().localMediaPlayURL(path: file.path))
-                                } label: {
-                                    VStack(spacing: 4) {
-                                        Text(episodeTitle(file.name, index: index))
-                                            .font(.subheadline.bold())
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.75)
-                                        Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 54)
-                                    .background(Color(.secondarySystemGroupedBackground).opacity(0.78), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .padding(18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 28)
+                    episodeSection
+                        .padding(.bottom, 28)
                 }
+                .frame(maxWidth: .infinity)
             }
         }
         .navigationTitle(series.catalog)
@@ -343,11 +315,49 @@ struct LocalLibraryDetailView: View {
         }
     }
 
-    private var episodeColumns: [GridItem] {
-        [
-            GridItem(.flexible(minimum: 0), spacing: 10),
-            GridItem(.flexible(minimum: 0), spacing: 10)
-        ]
+    private var episodeSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("分集")
+                .font(.title3.bold())
+                .padding(.horizontal, 24)
+
+            LazyVStack(spacing: 10) {
+                ForEach(Array(stride(from: 0, to: series.episodes.count, by: 2)), id: \.self) { start in
+                    HStack(spacing: 10) {
+                        episodeButton(file: series.episodes[start], index: start)
+                        if start + 1 < series.episodes.count {
+                            episodeButton(file: series.episodes[start + 1], index: start + 1)
+                        } else {
+                            Color.clear
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func episodeButton(file: MediaFile, index: Int) -> some View {
+        Button {
+            viewModel.play(title: file.name, url: viewModel.client().localMediaPlayURL(path: file.path))
+        } label: {
+            VStack(spacing: 4) {
+                Text(episodeTitle(file.name, index: index))
+                    .font(.subheadline.bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(Color(.secondarySystemGroupedBackground).opacity(0.86), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
