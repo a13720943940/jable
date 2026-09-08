@@ -27,6 +27,7 @@ final class AppViewModel: ObservableObject {
     @Published var selectedHuangguoSeries: HuangguoSeries?
     @Published var selectedHuangguoEpisodes: [HuangguoEpisode] = []
     @Published var selectedHuangguoOnline: HuangguoOnlineSeries?
+    @Published var huangguoEpisodeTasks: [HuangguoEpisodeTask] = []
     @Published var tasks: [DownloadTask] = []
     @Published var health: HealthStatus?
     @Published var license: LicenseInfo?
@@ -131,6 +132,16 @@ final class AppViewModel: ObservableObject {
         let query = taskSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !query.isEmpty else { return cloudTasks }
         return cloudTasks.filter { $0.catalog.lowercased().contains(query) || $0.title.lowercased().contains(query) || $0.message.lowercased().contains(query) }
+    }
+
+    var filteredHuangguoEpisodeTasks: [HuangguoEpisodeTask] {
+        let query = taskSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return huangguoEpisodeTasks }
+        return huangguoEpisodeTasks.filter {
+            $0.seriesTitle.lowercased().contains(query) ||
+            $0.episodeTitle.lowercased().contains(query) ||
+            $0.message.lowercased().contains(query)
+        }
     }
 
     func configure(serverURL: String, accessPassword: String = "") {
@@ -476,6 +487,12 @@ final class AppViewModel: ObservableObject {
             async let cloud = client().cloudTasks()
             tasks = try await local
             cloudTasks = try await cloud
+            do {
+                huangguoEpisodeTasks = try await client().huangguoRecentEpisodes(limit: 150)
+            } catch {
+                huangguoEpisodeTasks = []
+                statusMessage = "黄果下载记录暂不可用：\(error.localizedDescription)"
+            }
         } catch {
             statusMessage = error.localizedDescription
         }

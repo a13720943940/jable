@@ -517,6 +517,37 @@ struct HuangguoEpisode: Codable, Identifiable {
     }
 }
 
+struct HuangguoEpisodeTask: Codable, Identifiable {
+    var id: String
+    var seriesID: String
+    var ep: Int
+    var episodeTitle: String
+    var seriesTitle: String
+    var state: String
+    var uploadState: String
+    var progress: Double
+    var message: String
+    var error: String
+    var filePath: String
+    var uploadPath: String
+    var coverURL: String
+    var createdAt: String
+    var updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, ep, state, progress, message, error
+        case seriesID = "series_id"
+        case episodeTitle = "episode_title"
+        case seriesTitle = "series_title"
+        case uploadState = "upload_state"
+        case filePath = "file_path"
+        case uploadPath = "upload_path"
+        case coverURL = "cover_url"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
 struct HuangguoOnlineSeries: Codable {
     var id: String
     var title: String
@@ -860,6 +891,27 @@ extension HuangguoEpisode {
     }
 }
 
+extension HuangguoEpisodeTask {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.decodeString(.id)
+        seriesID = c.decodeString(.seriesID)
+        ep = c.decodeInt(.ep)
+        episodeTitle = c.decodeString(.episodeTitle)
+        seriesTitle = c.decodeString(.seriesTitle)
+        state = c.decodeString(.state)
+        uploadState = c.decodeString(.uploadState)
+        progress = c.decodeDouble(.progress)
+        message = c.decodeString(.message)
+        error = c.decodeString(.error)
+        filePath = c.decodeString(.filePath)
+        uploadPath = c.decodeString(.uploadPath)
+        coverURL = c.decodeString(.coverURL)
+        createdAt = c.decodeString(.createdAt)
+        updatedAt = c.decodeString(.updatedAt)
+    }
+}
+
 extension HuangguoOnlineSeries {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -1058,6 +1110,10 @@ struct APIClient {
 
     func huangguoEpisodes(seriesID: String) async throws -> [HuangguoEpisode] {
         try await request(path: "/api/hg/series/\(seriesID)/episodes", method: "GET")
+    }
+
+    func huangguoRecentEpisodes(limit: Int = 150) async throws -> [HuangguoEpisodeTask] {
+        try await request(path: "/api/hg/recent-episodes?limit=\(limit)", method: "GET")
     }
 
     func huangguoOnlineEpisodes(detailURL: String) async throws -> HuangguoOnlineSeries {
