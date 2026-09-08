@@ -3,7 +3,7 @@ name: jable-media-library
 services:
   app:
     platform: linux/amd64
-    image: jable-media-library:20260906-pipe-d-diag
+    image: jable-media-library:20260909-115-signin-amd64
     container_name: jable-media-library
     restart: unless-stopped
     shm_size: "1gb"
