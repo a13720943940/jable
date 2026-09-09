@@ -361,62 +361,78 @@ private struct PlaybackView: View {
     @State private var isReady = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                if let player {
-                    VideoPlayer(player: player)
-                        .ignoresSafeArea(edges: .bottom)
-                } else {
-                        ProgressView("正在准备播放…")
-                        .tint(.blue)
-                }
+        ZStack {
+            Color.black.ignoresSafeArea()
 
-                if !isReady {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            ProgressView()
-                                .tint(.blue)
-                            Text("正在加载视频流")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(.black.opacity(0.72), in: Capsule())
-                        .padding(.bottom, 28)
-                    }
-                }
+            if let player {
+                VideoPlayer(player: player)
+                    .ignoresSafeArea()
+            } else {
+                ProgressView("正在准备播放…")
+                    .tint(.white)
+                    .foregroundStyle(.white)
             }
-            .navigationTitle(request.title.isEmpty ? "正在播放" : request.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.black, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        restart()
-                    } label: {
-                        Label("重新加载", systemImage: "arrow.clockwise")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
+
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
                     Button {
                         player?.pause()
                         close()
                     } label: {
-                        Label("关闭", systemImage: "xmark")
+                        Image(systemName: "xmark")
+                            .font(.headline.weight(.bold))
+                            .frame(width: 42, height: 42)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+
+                    Text(request.title.isEmpty ? "正在播放" : request.title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Button {
+                        restart()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.headline.weight(.bold))
+                            .frame(width: 42, height: 42)
+                            .background(.ultraThinMaterial, in: Circle())
                     }
                 }
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
+                .background(
+                    LinearGradient(colors: [.black.opacity(0.75), .black.opacity(0)], startPoint: .top, endPoint: .bottom)
+                        .ignoresSafeArea(edges: .top)
+                )
+
+                Spacer()
+
+                if !isReady {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .tint(.white)
+                        Text("正在加载视频流")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .background(.black.opacity(0.64), in: Capsule())
+                    .padding(.bottom, 28)
+                }
             }
-            .onAppear {
-                restart()
-            }
-            .onDisappear {
-                player?.pause()
-                player = nil
-            }
+        }
+        .statusBarHidden(true)
+        .onAppear {
+            restart()
+        }
+        .onDisappear {
+            player?.pause()
+            player = nil
         }
     }
 

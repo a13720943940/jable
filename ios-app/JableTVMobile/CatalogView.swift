@@ -310,167 +310,262 @@ private struct CatalogLargeCard: View {
 
 struct JableDetailView: View {
     @EnvironmentObject private var viewModel: AppViewModel
+    @Environment(\.dismiss) private var dismiss
     let item: CatalogItem
     @State private var runningAction: DetailAction?
 
     var body: some View {
-        List {
-            Section {
-                KFImage(viewModel.client().proxiedImageURL(viewModel.selectedJableDetail?.coverURL ?? item.imageURL))
-                    .placeholder {
-                        ZStack {
-                            Rectangle().fill(Color(.secondarySystemFill))
-                            ProgressView()
-                        }
-                    }
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .blur(radius: viewModel.isPrivacyModeEnabled ? 12 : 0)
-
-                Text(viewModel.selectedJableDetail?.title ?? item.title)
-                    .font(.headline)
-                LabeledContent("番号", value: viewModel.selectedJableDetail?.catalog ?? item.catalog)
-                LabeledContent("时长", value: item.duration.isEmpty ? "未知" : item.duration)
-                LabeledContent("详情链接", value: item.detailURL)
+        ZStack {
+            detailBackground
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    heroSection
+                    actionSection
+                    capturedSection
+                    loadingSection
+                    sampleSection
+                    magnetSection
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 96)
+                .padding(.bottom, 120)
             }
-
-            Section("操作") {
-                Button {
-                    Task {
-                        runningAction = .local
-                        await viewModel.submitAutoTask(item)
-                        runningAction = nil
-                    }
-                } label: {
-                    if runningAction == .local {
-                        ProgressView()
-                    } else {
-                        Label("本地下载入库", systemImage: "arrow.down.circle")
-                    }
-                }
-                .disabled(runningAction != nil)
-
-                Button {
-                    Task {
-                        runningAction = .cloud
-                        await viewModel.submitSelectedToCloud()
-                        runningAction = nil
-                    }
-                } label: {
-                    if runningAction == .cloud {
-                        ProgressView()
-                    } else {
-                        Label("离线到 115", systemImage: "cloud")
-                    }
-                }
-                .disabled(runningAction != nil)
-
-                Button {
-                    Task {
-                        runningAction = .capture
-                        await viewModel.captureSelectedMedia()
-                        runningAction = nil
-                    }
-                } label: {
-                    if runningAction == .capture {
-                        ProgressView()
-                    } else {
-                        Label("抓取 M3U8", systemImage: "link")
-                    }
-                }
-                .disabled(runningAction != nil)
-
-                if let captured = viewModel.capturedMedia {
-                    Button {
-                        viewModel.play(title: captured.title, url: URL(string: captured.mediaURL))
-                    } label: {
-                        Label("在线播放", systemImage: "play.circle")
-                    }
-                    Text(captured.mediaURL)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-            }
-            .buttonStyle(.borderless)
-
-            if viewModel.isLoadingDetail {
-                Section {
-                    ProgressView("正在读取详情…")
-                }
-            }
-
-            if let detail = viewModel.selectedJableDetail {
-                if !detail.samples.isEmpty {
-                    Section("样张") {
-                        ScrollView(.horizontal) {
-                            LazyHStack(spacing: 12) {
-                                ForEach(detail.samples, id: \.self) { sample in
-                                    KFImage(viewModel.client().proxiedImageURL(sample))
-                                        .placeholder {
-                                            Image(systemName: "photo")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 220, height: 140)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        .blur(radius: viewModel.isPrivacyModeEnabled ? 12 : 0)
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                }
-
-                Section("磁力链接") {
-                    if detail.magnets.isEmpty {
-                        ContentUnavailableView("暂无磁力链接", systemImage: "link.badge.plus")
-                    } else {
-                        ForEach(detail.magnets) { magnet in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(magnet.name.isEmpty ? "磁力链接" : magnet.name)
-                                    .font(.headline)
-                                HStack {
-                                    if !magnet.size.isEmpty {
-                                        Text(magnet.size)
-                                    }
-                                    if !magnet.files.isEmpty {
-                                        Text(magnet.files)
-                                    }
-                                }
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                Button {
-                                    Task {
-                                        runningAction = .magnet(magnet.url)
-                                        await viewModel.submitSelectedToCloud(sourceURL: magnet.url)
-                                        runningAction = nil
-                                    }
-                                } label: {
-                                    if runningAction == .magnet(magnet.url) {
-                                        ProgressView()
-                                    } else {
-                                        Label("用此磁力离线到 115", systemImage: "cloud")
-                                    }
-                                }
-                                .buttonStyle(.borderless)
-                                .disabled(runningAction != nil)
-                            }
-                        }
-                    }
+        }
+        .navigationTitle(detailCatalog)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline.bold())
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
             }
         }
-        .navigationTitle(item.catalog.isEmpty ? "影片详情" : item.catalog)
-        .navigationBarTitleDisplayMode(.inline)
-        .scrollContentBackground(.hidden)
-        .background(Color(.systemGroupedBackground))
-        .toolbarBackground(.visible, for: .navigationBar)
         .task {
             await viewModel.selectCatalogItem(item)
         }
+    }
+
+    private var detail: JableDetail? { viewModel.selectedJableDetail }
+    private var detailTitle: String { detail?.title ?? item.title }
+    private var detailCatalog: String {
+        let catalog = detail?.catalog ?? item.catalog
+        return catalog.isEmpty ? "影片详情" : catalog
+    }
+    private var coverURL: String {
+        guard let detail, !detail.coverURL.isEmpty else { return item.imageURL }
+        return detail.coverURL
+    }
+
+    private var detailBackground: some View {
+        ZStack {
+            KFImage(viewModel.client().proxiedImageURL(coverURL))
+                .resizable()
+                .scaledToFill()
+                .ignoresSafeArea()
+                .blur(radius: viewModel.isPrivacyModeEnabled ? 22 : 16)
+                .opacity(0.46)
+            LinearGradient(
+                colors: [Color.black.opacity(0.18), Color(.systemBackground).opacity(0.62), Color(.systemBackground)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        }
+    }
+
+    private var heroSection: some View {
+        VStack(spacing: 16) {
+            KFImage(viewModel.client().proxiedImageURL(coverURL))
+                .placeholder {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 24).fill(.ultraThinMaterial)
+                        Image(systemName: "film.stack")
+                            .font(.largeTitle)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 210)
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .shadow(color: .black.opacity(0.22), radius: 24, x: 0, y: 12)
+                .blur(radius: viewModel.isPrivacyModeEnabled ? 12 : 0)
+
+            VStack(spacing: 8) {
+                Text(detailTitle)
+                    .font(.title2.bold())
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                Text("\(detailCatalog) · \(item.duration.isEmpty ? "时长未知" : item.duration)")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(item.detailURL)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var actionSection: some View {
+        VStack(spacing: 12) {
+            immersiveButton(title: "播放 / 抓取 M3U8", systemImage: "play.circle.fill", action: .capture) {
+                await viewModel.captureSelectedMedia()
+            }
+            HStack(spacing: 12) {
+                immersiveButton(title: "本地入库", systemImage: "arrow.down.circle.fill", action: .local) {
+                    await viewModel.submitAutoTask(item)
+                }
+                immersiveButton(title: "离线 115", systemImage: "cloud.circle.fill", action: .cloud) {
+                    await viewModel.submitSelectedToCloud()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var capturedSection: some View {
+        if let captured = viewModel.capturedMedia {
+            Button {
+                viewModel.play(title: captured.title, url: URL(string: captured.mediaURL))
+            } label: {
+                HStack {
+                    Label("在线播放", systemImage: "play.fill")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                }
+                .font(.headline)
+                .padding(16)
+                .background(.blue.opacity(0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private var loadingSection: some View {
+        if viewModel.isLoadingDetail {
+            ProgressView("正在读取详情…")
+                .frame(maxWidth: .infinity)
+                .padding(24)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private var sampleSection: some View {
+        if let detail, !detail.samples.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("样张预览")
+                    .font(.title3.bold())
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 12) {
+                        ForEach(detail.samples, id: \.self) { sample in
+                            KFImage(viewModel.client().proxiedImageURL(sample))
+                                .placeholder {
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .fill(.ultraThinMaterial)
+                                        .overlay(Image(systemName: "photo"))
+                                }
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 240, height: 150)
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .blur(radius: viewModel.isPrivacyModeEnabled ? 12 : 0)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var magnetSection: some View {
+        if let detail {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("磁力链接")
+                    .font(.title3.bold())
+                if detail.magnets.isEmpty {
+                    ContentUnavailableView("暂无磁力链接", systemImage: "link.badge.plus")
+                        .padding(18)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                } else {
+                    ForEach(detail.magnets) { magnet in
+                        magnetRow(magnet)
+                    }
+                }
+            }
+        }
+    }
+
+    private func immersiveButton(title: String, systemImage: String, action: DetailAction, operation: @escaping () async -> Void) -> some View {
+        Button {
+            Task {
+                runningAction = action
+                await operation()
+                runningAction = nil
+            }
+        } label: {
+            HStack {
+                if runningAction == action {
+                    ProgressView()
+                } else {
+                    Image(systemName: systemImage)
+                }
+                Text(title)
+                    .font(.subheadline.bold())
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(.white.opacity(0.92), in: Capsule())
+            .foregroundStyle(.black.opacity(0.84))
+        }
+        .buttonStyle(.plain)
+        .disabled(runningAction != nil)
+    }
+
+    private func magnetRow(_ magnet: MagnetItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(magnet.name.isEmpty ? "磁力链接" : magnet.name)
+                .font(.headline)
+                .lineLimit(2)
+            HStack(spacing: 8) {
+                if !magnet.size.isEmpty {
+                    Text(magnet.size)
+                }
+                if !magnet.files.isEmpty {
+                    Text(magnet.files)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            Button {
+                Task {
+                    runningAction = .magnet(magnet.url)
+                    await viewModel.submitSelectedToCloud(sourceURL: magnet.url)
+                    runningAction = nil
+                }
+            } label: {
+                Label("用此磁力离线到 115", systemImage: "cloud.fill")
+                    .font(.subheadline.bold())
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 42)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(runningAction != nil)
+        }
+        .padding(16)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 

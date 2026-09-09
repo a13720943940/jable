@@ -9,20 +9,39 @@ struct TasksView: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("来源", selection: $source) {
-                        Text("全部").tag("all")
-                        Text("115").tag("cloud")
-                        Text("本地").tag("local")
-                        Text("黄果").tag("huangguo")
-                    }
-                    .pickerStyle(.segmented)
-                }
+                    VStack(alignment: .leading, spacing: 18) {
+                        HStack(spacing: 14) {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.largeTitle)
+                                .foregroundStyle(.blue)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("下载中心")
+                                    .font(.largeTitle.bold())
+                                Text("\(totalTaskCount) 条记录 · 下拉同步最新状态")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
 
-                Section {
-                    LabeledContent("115 离线", value: "\(viewModel.cloudTasks.count)")
-                    LabeledContent("本地下载", value: "\(viewModel.tasks.count)")
-                    LabeledContent("黄果下载", value: "\(viewModel.huangguoEpisodeTasks.count)")
+                        HStack(spacing: 10) {
+                            taskStat(title: "115", value: "\(viewModel.cloudTasks.count)", color: .blue)
+                            taskStat(title: "本地", value: "\(viewModel.tasks.count)", color: .cyan)
+                            taskStat(title: "黄果", value: "\(viewModel.huangguoEpisodeTasks.count)", color: .orange)
+                        }
+
+                        Picker("来源", selection: $source) {
+                            Text("全部").tag("all")
+                            Text("115").tag("cloud")
+                            Text("本地").tag("local")
+                            Text("黄果").tag("huangguo")
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .padding(18)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                 }
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+                .listRowBackground(Color.clear)
 
                 if source == "all" || source == "cloud" {
                     Section("115 离线") {
@@ -238,8 +257,8 @@ struct TasksView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .scrollContentBackground(.hidden)
-            .background(LinearGradient(colors: [Color(.systemGroupedBackground), Color.blue.opacity(0.10), Color.cyan.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .toolbarBackground(.visible, for: .navigationBar)
+            .background(LinearGradient(colors: [Color(.systemGroupedBackground), Color.blue.opacity(0.16), Color.orange.opacity(0.08), Color(.systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
@@ -253,6 +272,24 @@ struct TasksView: View {
                 await viewModel.refreshTasks()
             }
         }
+    }
+
+    private var totalTaskCount: Int {
+        viewModel.cloudTasks.count + viewModel.tasks.count + viewModel.huangguoEpisodeTasks.count
+    }
+
+    private func taskStat(title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(.title3.bold())
+                .monospacedDigit()
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func label(for state: String, title: String) -> String {

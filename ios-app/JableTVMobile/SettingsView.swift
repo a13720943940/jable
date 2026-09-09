@@ -406,106 +406,23 @@ private struct LicenseAdminConsoleView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        Form {
-            Section("控制台连接") {
-                TextField("http://192.168.2.50:8789", text: $consoleURL)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($focused)
-
-                SecureField("授权控制台密码", text: $consolePassword)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-
-                Button {
-                    Task { await refresh() }
-                } label: {
-                    if isLoading {
-                        ProgressView()
-                    } else {
-                        Label("连接并刷新", systemImage: "arrow.clockwise")
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                consoleHero
+                connectionCard
+                if let summary {
+                    summaryCard(summary)
                 }
-                .disabled(isLoading || consoleURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || consolePassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                issueCard
+                recordsCard
+                revokedCard
             }
-
-            if let summary {
-                Section("概览") {
-                    LabeledContent("授权记录", value: "\(summary.recordCount)")
-                    LabeledContent("在线设备", value: "\(summary.onlineCount)")
-                    LabeledContent("吊销设备", value: "\(summary.revokedCount)")
-                    if let revocationURL = summary.revocationURL, !revocationURL.isEmpty {
-                        LabeledContent("吊销列表") {
-                            Text(revocationURL)
-                                .lineLimit(1)
-                                .textSelection(.enabled)
-                        }
-                    }
-                }
-            }
-
-            Section("签发授权码") {
-                TextField("设备码", text: $deviceID, axis: .vertical)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                TextField("所属人备注", text: $owner)
-                Stepper(days == 0 ? "有效期：永久" : "有效期：\(days) 天", value: $days, in: 0 ... 3650, step: 30)
-
-                Button {
-                    Task { await issue() }
-                } label: {
-                    Label("生成授权码", systemImage: "plus.seal")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isLoading || deviceID.trimmingCharacters(in: .whitespacesAndNewlines).count < 8 || consolePassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                if !issuedCode.isEmpty {
-                    Text(issuedCode)
-                        .font(.footnote.monospaced())
-                        .textSelection(.enabled)
-
-                    Button {
-                        UIPasteboard.general.string = issuedCode
-                        notify("授权码已复制")
-                    } label: {
-                        Label("复制授权码", systemImage: "doc.on.doc")
-                    }
-                }
-            }
-
-            Section("授权记录") {
-                if let records = summary?.records, !records.isEmpty {
-                    ForEach(records) { record in
-                        recordRow(record)
-                    }
-                } else {
-                    ContentUnavailableView("暂无授权记录", systemImage: "person.badge.key", description: Text("连接控制台后会显示已签发和已上报心跳的设备。"))
-                }
-            }
-
-            if let revoked = summary?.revoked, !revoked.isEmpty {
-                Section("吊销名单") {
-                    ForEach(revoked, id: \.self) { device in
-                        HStack(spacing: 10) {
-                            Text(device)
-                                .font(.footnote.monospaced())
-                                .lineLimit(2)
-                                .textSelection(.enabled)
-                            Spacer()
-                            Button("解除") {
-                                Task { await unrevoke(deviceID: device) }
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                    }
-                }
-            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
         }
         .navigationTitle("授权控制台")
         .navigationBarTitleDisplayMode(.inline)
-        .scrollContentBackground(.hidden)
-        .background(LinearGradient(colors: [Color(.systemGroupedBackground), Color.blue.opacity(0.10), Color.cyan.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .background(LinearGradient(colors: [Color(.systemGroupedBackground), Color.blue.opacity(0.16), Color.cyan.opacity(0.08), Color(.systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing))
         .alert("授权控制台", isPresented: $showMessage) {
             Button("知道了", role: .cancel) {}
         } message: {
@@ -517,6 +434,192 @@ private struct LicenseAdminConsoleView: View {
                 await refresh()
             }
         }
+    }
+
+    private var consoleHero: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
+                Image(systemName: "key.viewfinder")
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 58, height: 58)
+                    .background(LinearGradient(colors: [.blue, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("授权中心")
+                        .font(.largeTitle.bold())
+                    Text("发码、吊销、设备在线一页接管")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 10) {
+                statPill("授权", value: "\(summary?.recordCount ?? 0)", color: .blue)
+                statPill("在线", value: "\(summary?.onlineCount ?? 0)", color: .green)
+                statPill("吊销", value: "\(summary?.revokedCount ?? 0)", color: .red)
+            }
+        }
+        .padding(18)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+    }
+
+    private var connectionCard: some View {
+        card("控制台连接", systemImage: "server.rack") {
+            VStack(alignment: .leading, spacing: 12) {
+                TextField("http://192.168.2.50:8789", text: $consoleURL)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($focused)
+                    .textFieldStyle(.roundedBorder)
+
+                SecureField("授权控制台密码", text: $consolePassword)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
+
+                Button {
+                    Task { await refresh() }
+                } label: {
+                    if isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Label("连接并刷新", systemImage: "arrow.clockwise")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(isLoading || consoleURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || consolePassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+
+    private func summaryCard(_ summary: LicenseAdminSummary) -> some View {
+        card("服务概览", systemImage: "chart.bar.xaxis") {
+            VStack(alignment: .leading, spacing: 10) {
+                LabeledContent("授权记录", value: "\(summary.recordCount)")
+                LabeledContent("在线设备", value: "\(summary.onlineCount)")
+                LabeledContent("吊销设备", value: "\(summary.revokedCount)")
+                if let revocationURL = summary.revocationURL, !revocationURL.isEmpty {
+                    Divider()
+                    Text(revocationURL)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+    }
+
+    private var issueCard: some View {
+        card("签发授权码", systemImage: "plus.seal") {
+            VStack(alignment: .leading, spacing: 12) {
+                TextField("设备码", text: $deviceID, axis: .vertical)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
+                TextField("所属人备注", text: $owner)
+                    .textFieldStyle(.roundedBorder)
+                Stepper(days == 0 ? "有效期：永久" : "有效期：\(days) 天", value: $days, in: 0 ... 3650, step: 30)
+
+                Button {
+                    Task { await issue() }
+                } label: {
+                    Label("生成授权码", systemImage: "wand.and.stars")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(isLoading || deviceID.trimmingCharacters(in: .whitespacesAndNewlines).count < 8 || consolePassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if !issuedCode.isEmpty {
+                    Text(issuedCode)
+                        .font(.footnote.monospaced())
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .textSelection(.enabled)
+
+                    Button {
+                        UIPasteboard.general.string = issuedCode
+                        notify("授权码已复制")
+                    } label: {
+                        Label("复制授权码", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+
+    private var recordsCard: some View {
+        card("授权记录", systemImage: "person.badge.key") {
+            VStack(spacing: 12) {
+                if let records = summary?.records, !records.isEmpty {
+                    ForEach(records) { record in
+                        recordRow(record)
+                        if record.id != records.last?.id {
+                            Divider()
+                        }
+                    }
+                } else {
+                    ContentUnavailableView("暂无授权记录", systemImage: "person.badge.key", description: Text("连接控制台后会显示已签发和已上报心跳的设备。"))
+                }
+            }
+        }
+    }
+
+    private var revokedCard: some View {
+        Group {
+            if let revoked = summary?.revoked, !revoked.isEmpty {
+                card("吊销名单", systemImage: "person.crop.circle.badge.xmark") {
+                    VStack(spacing: 12) {
+                        ForEach(revoked, id: \.self) { device in
+                            HStack(spacing: 10) {
+                                Text(device)
+                                    .font(.footnote.monospaced())
+                                    .lineLimit(2)
+                                    .textSelection(.enabled)
+                                Spacer()
+                                Button("解除") {
+                                    Task { await unrevoke(deviceID: device) }
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func card<Content: View>(_ title: String, systemImage: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label(title, systemImage: systemImage)
+                .font(.headline)
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private func statPill(_ title: String, value: String, color: Color) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.title3.bold())
+                .monospacedDigit()
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 11)
+        .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func recordRow(_ record: LicenseAdminRecord) -> some View {
