@@ -292,13 +292,24 @@ struct LocalLibraryDetailView: View {
                     episodeSection
                         .padding(.bottom, 28)
                 }
+                .frame(maxWidth: 430)
+                .padding(.horizontal, 18)
                 .frame(maxWidth: .infinity)
             }
         }
         .navigationTitle(series.catalog)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline.bold())
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("刷新媒体库") {
@@ -320,7 +331,6 @@ struct LocalLibraryDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("分集")
                 .font(.title3.bold())
-                .padding(.horizontal, 24)
 
             LazyVStack(spacing: 10) {
                 ForEach(Array(stride(from: 0, to: series.episodes.count, by: 2)), id: \.self) { start in
@@ -335,7 +345,6 @@ struct LocalLibraryDetailView: View {
                     }
                 }
             }
-            .padding(.horizontal, 24)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

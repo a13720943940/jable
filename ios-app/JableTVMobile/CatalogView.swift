@@ -326,9 +326,11 @@ struct JableDetailView: View {
                     sampleSection
                     magnetSection
                 }
-                .padding(.horizontal, 20)
+                .frame(maxWidth: 430)
+                .padding(.horizontal, 18)
                 .padding(.top, 96)
                 .padding(.bottom, 120)
+                .frame(maxWidth: .infinity)
             }
         }
         .navigationTitle(detailCatalog)

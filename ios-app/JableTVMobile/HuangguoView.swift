@@ -309,13 +309,16 @@ struct HuangguoCatalogDetailView: View {
                         loadingEpisodesHint
                     }
                 }
-                .padding(.horizontal, 20)
+                .frame(maxWidth: 430)
+                .padding(.horizontal, 18)
                 .padding(.top, 92)
                 .padding(.bottom, 110)
+                .frame(maxWidth: .infinity)
             }
         }
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -385,7 +388,7 @@ struct HuangguoCatalogDetailView: View {
     }
 
     private var actionRow: some View {
-        HStack(spacing: 12) {
+        LazyVGrid(columns: detailColumns, spacing: 10) {
             Button {
                 running = "online"
                 Task {
@@ -405,13 +408,14 @@ struct HuangguoCatalogDetailView: View {
                 detailActionLabel(title: "入库下载", systemImage: "plus.circle.fill", active: running == "add")
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func onlineEpisodes(_ online: HuangguoOnlineSeries) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("分集")
                 .font(.title3.bold())
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: detailColumns, spacing: 10) {
                 ForEach(online.episodes) { episode in
                     Button {
                         play(episode: episode, in: online)
@@ -431,6 +435,7 @@ struct HuangguoCatalogDetailView: View {
                     .opacity(episode.locked || episode.playURL.isEmpty ? 0.45 : 1)
                 }
             }
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -483,13 +488,16 @@ struct HuangguoSeriesDetailView: View {
                     episodeGrid
                     deleteButton
                 }
-                .padding(.horizontal, 20)
+                .frame(maxWidth: 430)
+                .padding(.horizontal, 18)
                 .padding(.top, 92)
                 .padding(.bottom, 110)
+                .frame(maxWidth: .infinity)
             }
         }
         .navigationTitle(series.title)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -556,7 +564,7 @@ struct HuangguoSeriesDetailView: View {
     }
 
     private var actionGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+        LazyVGrid(columns: detailColumns, spacing: 10) {
             Button { run(.check(series.id), id: "check") } label: {
                 detailActionLabel(title: "检查追更", systemImage: "arrow.clockwise", active: runningID == "check")
             }
@@ -570,6 +578,7 @@ struct HuangguoSeriesDetailView: View {
                 detailActionLabel(title: series.completed == 1 ? "恢复追更" : "标记完结", systemImage: "checkmark.seal", active: runningID == "complete")
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private var episodeGrid: some View {
@@ -582,7 +591,7 @@ struct HuangguoSeriesDetailView: View {
                     .padding(28)
                     .background(.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             } else {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: detailColumns, spacing: 10) {
                     ForEach(viewModel.selectedHuangguoEpisodes) { episode in
                         Button {
                             if episode.filePath.isEmpty && episode.playURL.isEmpty {
@@ -609,6 +618,7 @@ struct HuangguoSeriesDetailView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .frame(maxWidth: .infinity)
             }
         }
     }
@@ -731,6 +741,11 @@ private struct HuangguoPosterImage: View {
         return URL(string: url)
     }
 }
+
+private let detailColumns = [
+    GridItem(.flexible(minimum: 0), spacing: 10),
+    GridItem(.flexible(minimum: 0), spacing: 10)
+]
 
 private func detailActionLabel(title: String, systemImage: String, active: Bool) -> some View {
     HStack(spacing: 8) {
