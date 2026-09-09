@@ -2553,7 +2553,10 @@ def _115_request(cookie, url, data=None, ua=None):
     try:
         reply = json.loads(raw or "{}")
     except ValueError:
-        raise RuntimeError(f"115 返回异常内容：{raw[:120]}")
+        snippet = " ".join(str(raw or "")[:180].split())
+        if str(raw or "").lstrip().startswith("<"):
+            raise RuntimeError("115 返回网页登录/风控页面，网页版签到接口不可用")
+        raise RuntimeError(f"115 返回异常内容：{snippet}")
     if reply.get("state") not in (True, 1, "1", "true"):
         reason = str(reply.get("error") or reply.get("error_msg") or reply.get("message")
                      or reply.get("msg") or raw[:120] or "115 API 调用失败")
@@ -2612,6 +2615,33 @@ def _already_115_signed(text):
     return any(keyword in value for keyword in ("已签到", "已经签到", "重复签到", "已签", "already sign", "already check"))
 
 
+def _validate_115_signin_reply(reply):
+    """115 部分签到接口 state=true 只代表查询成功，需要二次确认今天是否已签到。"""
+    data_obj = reply.get("data") if isinstance(reply.get("data"), dict) else {}
+    today = datetime.now().strftime("%Y%m%d")
+    today_info = data_obj.get("sign_today_info")
+    if data_obj.get("is_sign_today") in (1, "1", True):
+        return "115 签到成功"
+    if isinstance(today_info, (list, tuple)) and today_info:
+        return "115 签到成功"
+    if isinstance(today_info, dict) and today_info:
+        return "115 签到成功"
+    sign_list = data_obj.get("sign_list")
+    if isinstance(sign_list, list):
+        for item in sign_list:
+            if isinstance(item, dict) and str(item.get("sign_day", "")) == today:
+                return "115 今日已签到"
+    if data_obj.get("is_sign_today") in (0, "0", False):
+        raise RuntimeError("115 返回签到记录，但今天未签到")
+    text = json.dumps(reply, ensure_ascii=False)[:500]
+    if _already_115_signed(text):
+        return "115 今日已签到，无需重复执行"
+    message = str(reply.get("message") or reply.get("msg") or data_obj.get("message") or data_obj.get("msg") or "").strip()
+    if message and any(keyword in message for keyword in ("签到成功", "已签到", "重复签到")):
+        return message
+    raise RuntimeError("115 签到接口未返回今日签到成功标记")
+
+
 def _signin_retry_config(settings):
     try:
         retry_count = min(10, max(0, int(settings.get("cloud115_signin_retry_count", 2))))
@@ -2624,6 +2654,15 @@ def _signin_retry_config(settings):
     return retry_count, retry_interval
 
 
+def _friendly_115_signin_error(error_text):
+    text = str(error_text or "")
+    if "请重新登录" in text:
+        return "115 签到失败：当前 Cookie 可登录网盘文件接口，但签到接口要求移动端会话；请在「115 登录」选择 Android/iOS 客户端重新扫码后再试。"
+    if "网页登录/风控页面" in text or "<!DOCTYPE html" in text:
+        return "115 签到失败：网页版签到接口返回网页/风控页面；请改用 Android/iOS 扫码 Cookie 后重试。"
+    return f"115 签到失败：{text[:180]}"
+
+
 def run_115_signin(trigger="manual"):
     settings = get_settings()
     if str(settings.get("cloud115_mode", "bridge")) != "cookie":
@@ -2633,23 +2672,33 @@ def run_115_signin(trigger="manual"):
         raise RuntimeError("尚未保存 115 Cookie")
     retry_count, retry_interval = _signin_retry_config(settings)
     total_attempts = retry_count + 1
+    android_ua = (
+        "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36 115Browser/27.0"
+    )
+    ios_ua = (
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Mobile/15E148 115Browser/27.0"
+    )
     endpoints = [
-        ("网页版签到", "https://115.com/?ct=ajax_user&ac=checkin", b""),
-        ("安卓版积分签到", "https://proapi.115.com/android/2.0/user/points_sign", None),
+        ("Android 客户端积分签到", "https://proapi.115.com/android/2.0/user/points_sign", None, android_ua),
+        ("iOS 客户端积分签到", "https://proapi.115.com/ios/2.0/user/points_sign", None, ios_ua),
+        ("网页版签到", "https://115.com/?ct=ajax_user&ac=checkin", b"", None),
     ]
     last_error = ""
     for attempt in range(1, total_attempts + 1):
         attempt_errors = []
-        for name, url, data in endpoints:
+        for name, url, data, ua in endpoints:
             try:
-                reply = _115_request(cookie, url, data=data)
+                reply = _115_request(cookie, url, data=data, ua=ua)
+                success_message = _validate_115_signin_reply(reply)
                 data_obj = reply.get("data") if isinstance(reply.get("data"), dict) else {}
                 message = str(
                     reply.get("message")
                     or reply.get("msg")
                     or data_obj.get("message")
                     or data_obj.get("msg")
-                    or "115 签到成功"
+                    or success_message
                 )
                 reward = str(
                     data_obj.get("points")
@@ -2676,8 +2725,9 @@ def run_115_signin(trigger="manual"):
                 detail=last_error[:500]
             )
             time.sleep(retry_interval)
-    rec = _record_115_signin("failed", f"115 签到失败：{last_error[:180]}")
-    write_app_log("error", "115", "signin", f"115 签到失败（已尝试 {total_attempts} 次）", detail=last_error[:500])
+    friendly_message = _friendly_115_signin_error(last_error)
+    rec = _record_115_signin("failed", friendly_message, raw=last_error[:2000])
+    write_app_log("error", "115", "signin", f"115 签到失败（已尝试 {total_attempts} 次）：{friendly_message}", detail=last_error[:500])
     raise RuntimeError(rec["message"])
 
 
