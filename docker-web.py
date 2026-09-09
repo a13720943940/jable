@@ -141,6 +141,8 @@ DEFAULT_SETTINGS = {
     # 115 自动签到：cron 五段格式，默认每天 08:00 执行
     "cloud115_signin_enabled": False,
     "cloud115_signin_cron": "0 8 * * *",
+    "cloud115_signin_retry_count": 2,
+    "cloud115_signin_retry_interval": 60,
     # 自动离线到 115: 模式A=浏览详情自动离线, 模式B=定时追新扫描
     "auto_offline_enabled": False,
     "auto_offline_browse": True,      # 模式 A:打开详情时命中规则自动离线
@@ -1050,6 +1052,14 @@ def save_settings(values):
     settings["cloud115_signin_cron"] = normalize_cron_expression(
         str(settings.get("cloud115_signin_cron", "0 8 * * *") or "0 8 * * *")
     )
+    try:
+        settings["cloud115_signin_retry_count"] = min(10, max(0, int(settings.get("cloud115_signin_retry_count", 2))))
+    except (TypeError, ValueError):
+        settings["cloud115_signin_retry_count"] = 2
+    try:
+        settings["cloud115_signin_retry_interval"] = min(86400, max(10, int(settings.get("cloud115_signin_retry_interval", 60))))
+    except (TypeError, ValueError):
+        settings["cloud115_signin_retry_interval"] = 60
     try:
         settings["cloud_ad_min_mb"] = min(500.0, max(0.0, float(settings.get("cloud_ad_min_mb", 0))))
     except (TypeError, ValueError):
@@ -2597,6 +2607,23 @@ def _record_115_signin(state, message, reward="", raw=""):
     return {"id": rec_id, "created_at": now, "state": state, "message": message, "reward": reward}
 
 
+def _already_115_signed(text):
+    value = str(text or "").lower()
+    return any(keyword in value for keyword in ("已签到", "已经签到", "重复签到", "已签", "already sign", "already check"))
+
+
+def _signin_retry_config(settings):
+    try:
+        retry_count = min(10, max(0, int(settings.get("cloud115_signin_retry_count", 2))))
+    except (TypeError, ValueError):
+        retry_count = 2
+    try:
+        retry_interval = min(86400, max(10, int(settings.get("cloud115_signin_retry_interval", 60))))
+    except (TypeError, ValueError):
+        retry_interval = 60
+    return retry_count, retry_interval
+
+
 def run_115_signin(trigger="manual"):
     settings = get_settings()
     if str(settings.get("cloud115_mode", "bridge")) != "cookie":
@@ -2604,36 +2631,53 @@ def run_115_signin(trigger="manual"):
     cookie = str(settings.get("cloud115_cookie", "") or "").strip()
     if not cookie:
         raise RuntimeError("尚未保存 115 Cookie")
+    retry_count, retry_interval = _signin_retry_config(settings)
+    total_attempts = retry_count + 1
     endpoints = [
-        ("https://115.com/?ct=ajax_user&ac=checkin", b""),
-        ("https://proapi.115.com/android/2.0/user/points_sign", None),
+        ("网页版签到", "https://115.com/?ct=ajax_user&ac=checkin", b""),
+        ("安卓版积分签到", "https://proapi.115.com/android/2.0/user/points_sign", None),
     ]
     last_error = ""
-    for url, data in endpoints:
-        try:
-            reply = _115_request(cookie, url, data=data)
-            data_obj = reply.get("data") if isinstance(reply.get("data"), dict) else {}
-            message = str(
-                reply.get("message")
-                or reply.get("msg")
-                or data_obj.get("message")
-                or data_obj.get("msg")
-                or "115 签到成功"
+    for attempt in range(1, total_attempts + 1):
+        attempt_errors = []
+        for name, url, data in endpoints:
+            try:
+                reply = _115_request(cookie, url, data=data)
+                data_obj = reply.get("data") if isinstance(reply.get("data"), dict) else {}
+                message = str(
+                    reply.get("message")
+                    or reply.get("msg")
+                    or data_obj.get("message")
+                    or data_obj.get("msg")
+                    or "115 签到成功"
+                )
+                reward = str(
+                    data_obj.get("points")
+                    or data_obj.get("score")
+                    or data_obj.get("reward")
+                    or data_obj.get("continuity_day")
+                    or ""
+                )
+                rec = _record_115_signin("success", message, reward=reward, raw=json.dumps(reply, ensure_ascii=False))
+                write_app_log("success", "115", "signin", f"115 签到成功（{trigger}，第 {attempt}/{total_attempts} 次）：{message}", detail=json.dumps(reply, ensure_ascii=False)[:500])
+                return rec
+            except Exception as error:
+                text = str(error)
+                if _already_115_signed(text):
+                    rec = _record_115_signin("success", "115 今日已签到，无需重复执行", raw=text[:500])
+                    write_app_log("success", "115", "signin", f"115 今日已签到（{trigger}，第 {attempt}/{total_attempts} 次）", detail=text[:500])
+                    return rec
+                attempt_errors.append(f"{name}: {text}")
+        last_error = "；".join(attempt_errors) or last_error
+        if attempt < total_attempts:
+            write_app_log(
+                "warning", "115", "signin-retry",
+                f"115 签到第 {attempt}/{total_attempts} 次失败，{retry_interval} 秒后重试",
+                detail=last_error[:500]
             )
-            reward = str(
-                data_obj.get("points")
-                or data_obj.get("score")
-                or data_obj.get("reward")
-                or data_obj.get("continuity_day")
-                or ""
-            )
-            rec = _record_115_signin("success", message, reward=reward, raw=json.dumps(reply, ensure_ascii=False))
-            write_app_log("success", "115", "signin", f"115 签到成功（{trigger}）：{message}", detail=json.dumps(reply, ensure_ascii=False)[:500])
-            return rec
-        except Exception as error:
-            last_error = str(error)
+            time.sleep(retry_interval)
     rec = _record_115_signin("failed", f"115 签到失败：{last_error[:180]}")
-    write_app_log("error", "115", "signin", "115 签到失败", detail=last_error[:500])
+    write_app_log("error", "115", "signin", f"115 签到失败（已尝试 {total_attempts} 次）", detail=last_error[:500])
     raise RuntimeError(rec["message"])
 
 
@@ -4790,11 +4834,14 @@ def check_115_login():
 @app.get("/api/115/signin")
 def api_115_signin_status():
     settings = get_settings()
+    retry_count, retry_interval = _signin_retry_config(settings)
     return jsonify(
         ok=True,
         enabled=bool(settings.get("cloud115_signin_enabled", False)),
         cron=str(settings.get("cloud115_signin_cron", "0 8 * * *") or "0 8 * * *"),
-        logs=list_115_signin_logs(int(request.args.get("limit", "30") or 30))
+        retry_count=retry_count,
+        retry_interval=retry_interval,
+        logs=list_115_signin_logs(int(request.args.get("limit", "5") or 5))
     )
 
 
@@ -4803,22 +4850,28 @@ def api_115_signin_now():
     try:
         record = run_115_signin(trigger="manual")
         settings = get_settings()
+        retry_count, retry_interval = _signin_retry_config(settings)
         return jsonify(
             ok=True,
             enabled=bool(settings.get("cloud115_signin_enabled", False)),
             cron=str(settings.get("cloud115_signin_cron", "0 8 * * *") or "0 8 * * *"),
+            retry_count=retry_count,
+            retry_interval=retry_interval,
             message=record["message"],
             record=record,
-            logs=list_115_signin_logs(30)
+            logs=list_115_signin_logs(5)
         )
     except Exception as error:
         settings = get_settings()
+        retry_count, retry_interval = _signin_retry_config(settings)
         return jsonify(
             ok=False,
             enabled=bool(settings.get("cloud115_signin_enabled", False)),
             cron=str(settings.get("cloud115_signin_cron", "0 8 * * *") or "0 8 * * *"),
+            retry_count=retry_count,
+            retry_interval=retry_interval,
             message=str(error)[:220],
-            logs=list_115_signin_logs(30)
+            logs=list_115_signin_logs(5)
         ), 502
 
 

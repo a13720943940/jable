@@ -36,7 +36,7 @@ type Settings = {
   cloud_transfer_enabled?: boolean; cloud_transfer_path?: string; cloud_transfer_cid?: string; cloud_poll_interval?: number; cloud_ad_min_mb?: number;
   auto_strm_enabled?: boolean; service_base_url?: string; strm_root_dir?: string;
   cloud115_play_mode?: 'proxy' | 'redirect';
-  cloud115_signin_enabled?: boolean; cloud115_signin_cron?: string;
+  cloud115_signin_enabled?: boolean; cloud115_signin_cron?: string; cloud115_signin_retry_count?: number; cloud115_signin_retry_interval?: number;
   auto_offline_enabled?: boolean; auto_offline_browse?: boolean; auto_offline_schedule?: boolean;
   auto_offline_interval?: number; auto_offline_pages?: number; auto_offline_whitelist?: string;
   auto_offline_min_duration?: number; auto_offline_min_size?: number; auto_offline_daily_limit?: number;
@@ -64,7 +64,7 @@ type HgEpisode = {
 type HgCatalogItem = { id: string; title: string; cover_url: string; remark: string; detail_url: string }
 type HgCatalogReply = { items: HgCatalogItem[]; tabs: { name: string; id: string }[]; page: number; query: string; source_url: string }
 type SigninLog = { id: string; created_at: string; state: string; message: string; reward?: string }
-type SigninStatus = { ok: boolean; enabled: boolean; cron: string; logs: SigninLog[]; message?: string }
+type SigninStatus = { ok: boolean; enabled: boolean; cron: string; retry_count?: number; retry_interval?: number; logs: SigninLog[]; message?: string }
 
 // 后端在未授权时对 index.html 注入 window.__UNLICENSED__；api 层短路，避免锁页期间重复请求/报错
 let __unlicensed = (window as unknown as { __UNLICENSED__?: boolean }).__UNLICENSED__ === true
@@ -366,6 +366,8 @@ function App() {
   const [settingsForm] = Form.useForm<Settings>()
   const [cloudForm] = Form.useForm()
   const [filmSearch, setFilmSearch] = useState('')
+  const [settingsTab, setSettingsTab] = useState('network')
+  const [logModulePreset, setLogModulePreset] = useState('all')
   const currentLocalTasks = useMemo(() => downloads.filter(item => selected && item.catalog === selected.catalog), [downloads, selected])
   const currentCloudTasks = useMemo(() => cloudTasks.filter(item => selected && (item.detail_url === selected.detail_url || item.catalog === selected.catalog)), [cloudTasks, selected])
   const filteredFilms = useMemo(() => {
@@ -497,6 +499,16 @@ function App() {
     const enabled = settings?.privacy_mode !== false
     document.body.classList.toggle('privacy-mode', enabled)
   }, [settings?.privacy_mode])
+  useEffect(() => {
+    const openLogCenter = (event: Event) => {
+      const detail = (event as CustomEvent<{ module?: string }>).detail
+      setPage('settings')
+      setSettingsTab('logs')
+      setLogModulePreset(detail?.module || 'all')
+    }
+    window.addEventListener('jable-open-log-center', openLogCenter)
+    return () => window.removeEventListener('jable-open-log-center', openLogCenter)
+  }, [])
   useEffect(() => {
     const hasCache = !!cachedFilms
     loadFilms(false, cachedPage || 1, hasCache, catalogSection)
@@ -782,7 +794,7 @@ function App() {
             </div>
             <Card>
               <Form form={settingsForm} layout="vertical">
-                <Tabs items={[
+                <Tabs activeKey={settingsTab} onChange={setSettingsTab} items={[
                   { key: 'network', label: '网络代理', children: <><Form.Item name="threads" label="本地下载线程"><InputNumber min={1} max={32} style={{ width: '100%' }} /></Form.Item><Form.Item name="proxy" label="代理地址"><Input placeholder="http://192.168.2.1:7890 或 socks5://host:port" /></Form.Item><Form.Item label="代理连通检测" tooltip="用上方代理地址访问外网测试可达性，可检测未保存的输入值"><Space wrap><Button icon={<ApiOutlined />} loading={proxyTesting} onClick={testProxy}>检测连通</Button>{proxyTestResult && <Typography.Text type={proxyTestResult.ok ? 'success' : 'danger'}>{proxyTestResult.message}</Typography.Text>}</Space></Form.Item><Form.Item name="jable_cookie" label="Jable Cookie"><Input.Password placeholder={settingsForm.getFieldValue('jable_cookie_configured') ? '已保存，留空保持不变' : '从可访问 Jable 的浏览器复制 Cookie'} /></Form.Item><Divider orientation="left" plain>隐私保护</Divider><Form.Item name="privacy_mode" valuePropName="checked" label="隐私模式" tooltip="开启后所有影片封面自动模糊（防止截屏/投屏泄露），鼠标悬停时轻微清晰化"><Switch checkedChildren="封面模糊" unCheckedChildren="正常显示" /></Form.Item></> },
                   { key: 'access', label: '访问安全', children: <AccessSecurityPanel configured={settings?.site_password_configured} onChanged={reloadSettingsForm} /> },
                   { key: 'paths', label: '路径配置', children: <PathPipelineConfig settingsForm={settingsForm} /> },
@@ -827,7 +839,7 @@ function App() {
                     </ul>
                   </Typography> },
                   { key: 'maintenance', label: '数据维护', children: <MaintenancePanel /> },
-                  { key: 'logs', label: '日志中心', children: <LogCenterPage /> },
+                  { key: 'logs', label: '日志中心', children: <LogCenterPage initialModule={logModulePreset} /> },
                   { key: 'license', label: '授权管理', children: <LicenseManager /> }
                 ]} />
               </Form>
@@ -1020,19 +1032,28 @@ function Cloud115SigninPanel({ status, loading, onRefresh, onRun }: {
 }) {
   const [enabled, setEnabled] = useState(false)
   const [cron, setCron] = useState('0 8 * * *')
+  const [retryCount, setRetryCount] = useState(2)
+  const [retryInterval, setRetryInterval] = useState(60)
   const [saving, setSaving] = useState(false)
   useEffect(() => {
     if (!status) return
     setEnabled(!!status.enabled)
     setCron(status.cron || '0 8 * * *')
-  }, [status?.enabled, status?.cron])
+    setRetryCount(Number(status.retry_count ?? 2))
+    setRetryInterval(Number(status.retry_interval ?? 60))
+  }, [status?.enabled, status?.cron, status?.retry_count, status?.retry_interval])
   const save = async () => {
     setSaving(true)
     try {
       await api('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cloud115_signin_enabled: enabled, cloud115_signin_cron: cron })
+        body: JSON.stringify({
+          cloud115_signin_enabled: enabled,
+          cloud115_signin_cron: cron,
+          cloud115_signin_retry_count: retryCount,
+          cloud115_signin_retry_interval: retryInterval
+        })
       })
       message.success('115 自动签到设置已保存')
       onRefresh()
@@ -1042,22 +1063,27 @@ function Cloud115SigninPanel({ status, loading, onRefresh, onRun }: {
       setSaving(false)
     }
   }
+  const recentLogs = status?.logs?.slice(0, 5) || []
   return <Card size="small" title={<Space>115 自动签到{enabled ? <Tag color="success">已开启</Tag> : <Tag>未开启</Tag>}</Space>} style={{ marginTop: 16 }}>
-    <Alert type="info" showIcon message="需要 Cookie 直连模式" description="扫码登录或填写 115 Cookie 后可用。cron 为五段格式：分钟 小时 日期 月份 星期，例如 0 8 * * * 表示每天 08:00。" style={{ marginBottom: 14 }} />
+    <Alert type="info" showIcon message="需要 Cookie 直连模式" description="扫码登录或填写 115 Cookie 后可用。cron 为五段格式：分钟 小时 日期 月份 星期，例如 0 8 * * * 表示每天 08:00。签到失败会按下面配置自动重试，详细过程写入日志中心。" style={{ marginBottom: 14 }} />
     <Space wrap align="start" size={12}>
       <Switch checked={enabled} onChange={setEnabled} checkedChildren="自动签到" unCheckedChildren="关闭" />
       <Input value={cron} onChange={e => setCron(e.target.value)} placeholder="0 8 * * *" style={{ width: 180 }} />
+      <InputNumber min={0} max={10} value={retryCount} onChange={value => setRetryCount(Number(value ?? 0))} addonBefore="失败重试" addonAfter="次" style={{ width: 160 }} />
+      <InputNumber min={10} max={86400} value={retryInterval} onChange={value => setRetryInterval(Number(value ?? 60))} addonBefore="间隔" addonAfter="秒" style={{ width: 170 }} />
       <Button icon={<SettingOutlined />} loading={saving} onClick={save}>保存签到设置</Button>
       <Button type="primary" icon={<CheckCircleOutlined />} loading={loading} onClick={onRun}>立即签到</Button>
       <Button icon={<ReloadOutlined />} onClick={onRefresh}>刷新记录</Button>
+      <Button icon={<FileTextOutlined />} onClick={() => window.dispatchEvent(new CustomEvent('jable-open-log-center', { detail: { module: '115' } }))}>更多日志</Button>
     </Space>
-    <Divider orientation="left" plain>签到记录</Divider>
-    {status?.logs?.length ? <List size="small" dataSource={status.logs} renderItem={log => <List.Item>
+    <Divider orientation="left" plain>最近 5 条签到记录</Divider>
+    {recentLogs.length ? <List size="small" dataSource={recentLogs} renderItem={log => <List.Item>
       <List.Item.Meta
         title={<Space wrap><Tag color={log.state === 'success' ? 'success' : 'error'}>{log.state === 'success' ? '成功' : '失败'}</Tag><Typography.Text>{log.message}</Typography.Text>{log.reward && <Tag color="blue">{log.reward}</Tag>}</Space>}
         description={log.created_at}
       />
     </List.Item>} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无签到记录" />}
+    <Typography.Text type="secondary">这里只展示最近 5 条；每次失败重试过程、接口返回和更多历史请在日志中心按模块 115 查看。</Typography.Text>
   </Card>
 }
 
@@ -1947,11 +1973,11 @@ function HuangguoPage({ onPlayLocal }: { onPlayLocal: (item: { name: string; pat
   </div>
 }
 
-function LogCenterPage() {
+function LogCenterPage({ initialModule = 'all' }: { initialModule?: string }) {
   const [logs, setLogs] = useState<AppLog[]>([])
   const [stats, setStats] = useState<LogStats | null>(null)
   const [loading, setLoading] = useState(false)
-  const [moduleFilter, setModuleFilter] = useState('all')
+  const [moduleFilter, setModuleFilter] = useState(initialModule || 'all')
   const [levelFilter, setLevelFilter] = useState('all')
   const [keyword, setKeyword] = useState('')
   const [active, setActive] = useState<AppLog | null>(null)
@@ -1989,6 +2015,9 @@ function LogCenterPage() {
   }
 
   useEffect(() => { load() }, [moduleFilter, levelFilter])
+  useEffect(() => {
+    if (initialModule && initialModule !== moduleFilter) setModuleFilter(initialModule)
+  }, [initialModule])
 
   const clearLogs = () => {
     Modal.confirm({

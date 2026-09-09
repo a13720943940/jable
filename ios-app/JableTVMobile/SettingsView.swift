@@ -148,6 +148,10 @@ struct SettingsView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
 
+                    Stepper("失败重试 \(viewModel.settings.cloud115SigninRetryCount ?? 2) 次", value: intBinding(\.cloud115SigninRetryCount, defaultValue: 2), in: 0 ... 10)
+
+                    Stepper("重试间隔 \(viewModel.settings.cloud115SigninRetryInterval ?? 60) 秒", value: intBinding(\.cloud115SigninRetryInterval, defaultValue: 60), in: 10 ... 86400, step: 30)
+
                     Button {
                         Task { await viewModel.run115SigninNow() }
                     } label: {
@@ -165,7 +169,7 @@ struct SettingsView: View {
                     }
 
                     if let logs = viewModel.cloud115SigninStatus?.logs, !logs.isEmpty {
-                        ForEach(logs.prefix(8)) { log in
+                        ForEach(logs.prefix(5)) { log in
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
                                     Text(log.state == "success" ? "成功" : "失败")

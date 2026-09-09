@@ -342,6 +342,8 @@ struct AppSettings: Codable {
     var cloud115PlayMode: String?
     var cloud115SigninEnabled: Bool?
     var cloud115SigninCron: String?
+    var cloud115SigninRetryCount: Int?
+    var cloud115SigninRetryInterval: Int?
     var cloudTransferEnabled: Bool?
     var cloudTransferPath: String?
     var cloudTransferCid: String?
@@ -395,6 +397,8 @@ struct AppSettings: Codable {
         case cloud115PlayMode = "cloud115_play_mode"
         case cloud115SigninEnabled = "cloud115_signin_enabled"
         case cloud115SigninCron = "cloud115_signin_cron"
+        case cloud115SigninRetryCount = "cloud115_signin_retry_count"
+        case cloud115SigninRetryInterval = "cloud115_signin_retry_interval"
         case cloudTransferEnabled = "cloud_transfer_enabled"
         case cloudTransferPath = "cloud_transfer_path"
         case cloudTransferCid = "cloud_transfer_cid"
@@ -601,11 +605,15 @@ struct Cloud115SigninStatus: Codable {
     let ok: Bool?
     let enabled: Bool
     let cron: String
+    let retryCount: Int
+    let retryInterval: Int
     let logs: [Cloud115SigninLog]
     let message: String?
 
     enum CodingKeys: String, CodingKey {
         case ok, enabled, cron, logs, message
+        case retryCount = "retry_count"
+        case retryInterval = "retry_interval"
     }
 }
 
@@ -1063,6 +1071,8 @@ struct APIClient {
         if let cloud115PlayMode = settings.cloud115PlayMode { object["cloud115_play_mode"] = cloud115PlayMode }
         if let cloud115SigninEnabled = settings.cloud115SigninEnabled { object["cloud115_signin_enabled"] = cloud115SigninEnabled }
         if let cloud115SigninCron = settings.cloud115SigninCron { object["cloud115_signin_cron"] = cloud115SigninCron }
+        if let cloud115SigninRetryCount = settings.cloud115SigninRetryCount { object["cloud115_signin_retry_count"] = cloud115SigninRetryCount }
+        if let cloud115SigninRetryInterval = settings.cloud115SigninRetryInterval { object["cloud115_signin_retry_interval"] = cloud115SigninRetryInterval }
         if let cloudTransferEnabled = settings.cloudTransferEnabled { object["cloud_transfer_enabled"] = cloudTransferEnabled }
         if let cloudTransferPath = settings.cloudTransferPath { object["cloud_transfer_path"] = cloudTransferPath }
         if let cloudTransferCid = settings.cloudTransferCid { object["cloud_transfer_cid"] = cloudTransferCid }
@@ -1406,6 +1416,8 @@ extension Cloud115SigninStatus {
         ok = try? c.decodeIfPresent(Bool.self, forKey: .ok)
         enabled = c.decodeBool(.enabled)
         cron = c.decodeString(.cron)
+        retryCount = c.contains(.retryCount) ? c.decodeInt(.retryCount) : 2
+        retryInterval = c.contains(.retryInterval) ? c.decodeInt(.retryInterval) : 60
         logs = (try? c.decode([Cloud115SigninLog].self, forKey: .logs)) ?? []
         message = c.decodeStringIfPresent(.message)
     }

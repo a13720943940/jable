@@ -615,6 +615,8 @@ final class AppViewModel: ObservableObject {
             cloud115SigninStatus = try await client().cloud115SigninStatus()
             settings.cloud115SigninEnabled = cloud115SigninStatus?.enabled
             settings.cloud115SigninCron = cloud115SigninStatus?.cron
+            settings.cloud115SigninRetryCount = cloud115SigninStatus?.retryCount
+            settings.cloud115SigninRetryInterval = cloud115SigninStatus?.retryInterval
         } catch {
             statusMessage = error.localizedDescription
         }
